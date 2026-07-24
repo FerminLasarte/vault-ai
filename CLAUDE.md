@@ -26,7 +26,7 @@ The **only** exception is the end-user-facing UI copy (labels, buttons, messages
 
 ## UI/UX principles
 
-The primary design directive for this project is a **minimalist, elegant, high-end** interface. When building or reviewing UI:
+The primary design directive for this project is a **minimalist, elegant, high-end** interface, in the spirit of Notion's clean, content-first UI. When building or reviewing UI:
 
 - Prioritize clean, uncluttered layouts with generous whitespace over dense ones.
 - Favor a restrained, neutral color palette and typography over decorative flourishes.
