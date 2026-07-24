@@ -1,37 +1,45 @@
-import { ArrowLeftRight, LayoutDashboard, Settings, Tags, Wallet } from "lucide-react";
+import { LayoutDashboard, Settings, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { label: "Resumen", icon: LayoutDashboard, active: true },
-  { label: "Transacciones", icon: ArrowLeftRight, active: false },
-  { label: "Categorías", icon: Tags, active: false },
-  { label: "Ajustes", icon: Settings, active: false },
-] as const;
+export type View = "dashboard" | "settings";
 
-export function Sidebar() {
+const NAV_ITEMS = [
+  { view: "dashboard", label: "Resumen", icon: LayoutDashboard },
+  { view: "settings", label: "Ajustes", icon: Settings },
+] as const satisfies ReadonlyArray<{ view: View; label: string; icon: typeof Wallet }>;
+
+interface SidebarProps {
+  currentView: View;
+  onNavigate: (view: View) => void;
+}
+
+export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-6 py-6">
-        <Wallet className="size-5" />
-        <span className="font-heading text-lg font-semibold tracking-tight">
+    <aside className="flex h-screen w-16 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:w-60">
+      <div className="flex items-center justify-center gap-2 px-2 py-6 sm:justify-start sm:px-6">
+        <Wallet className="size-5 shrink-0" />
+        <span className="hidden font-heading text-lg font-semibold tracking-tight sm:inline">
           Vault
         </span>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3">
-        {NAV_ITEMS.map(({ label, icon: Icon, active }) => (
+      <nav className="flex flex-1 flex-col gap-1 px-2 sm:px-3">
+        {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
           <button
-            key={label}
+            key={view}
             type="button"
+            title={label}
+            aria-current={currentView === view ? "page" : undefined}
+            onClick={() => onNavigate(view)}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-              active
+              "flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors sm:justify-start sm:px-3",
+              currentView === view
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
             )}
           >
-            <Icon className="size-4" />
-            {label}
+            <Icon className="size-4 shrink-0" />
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </nav>

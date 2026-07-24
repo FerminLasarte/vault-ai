@@ -58,6 +58,76 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_currency_to_transactions",
+            sql: "
+                ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR';
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "create_payment_methods_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS payment_methods (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL CHECK (type IN ('bank', 'cash', 'wallet', 'card')),
+                    currency TEXT NOT NULL
+                );
+
+                INSERT INTO payment_methods (name, type, currency) VALUES
+                    ('Efectivo ARS', 'cash', 'ARS'),
+                    ('Efectivo USD', 'cash', 'USD'),
+                    ('Mercado Pago', 'wallet', 'ARS'),
+                    ('Cuenta Bancaria ARS', 'bank', 'ARS'),
+                    ('Cuenta Bancaria USD', 'bank', 'USD');
+            ",
+            kind: MigrationKind::Up,
+        },
+        // SQLite cannot drop or retype a column in place on older versions, so
+        // the table is rebuilt. Legacy free-text payment methods are matched
+        // back to the seeded rows by name where possible; anything unmatched
+        // becomes NULL rather than blocking the migration.
+        Migration {
+            version: 6,
+            description: "link_transactions_to_payment_methods",
+            sql: "
+                CREATE TABLE transactions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    amount REAL NOT NULL,
+                    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+                    category_id INTEGER REFERENCES categories(id),
+                    payment_method_id INTEGER REFERENCES payment_methods(id),
+                    description TEXT,
+                    date TEXT NOT NULL,
+                    currency TEXT NOT NULL DEFAULT 'ARS'
+                );
+
+                INSERT INTO transactions_new
+                    (id, amount, type, category_id, payment_method_id, description, date, currency)
+                SELECT
+                    t.id,
+                    t.amount,
+                    t.type,
+                    t.category_id,
+                    (SELECT p.id FROM payment_methods p
+                      WHERE p.currency = t.currency
+                        AND ((t.payment_method = 'cash' AND p.type = 'cash')
+                          OR (t.payment_method = 'mercado_pago' AND p.name = 'Mercado Pago')
+                          OR (t.payment_method = 'bank_transfer' AND p.type = 'bank'))
+                      LIMIT 1),
+                    t.description,
+                    t.date,
+                    t.currency
+                FROM transactions t;
+
+                DROP TABLE transactions;
+                ALTER TABLE transactions_new RENAME TO transactions;
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,38 +13,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { insertTransaction, listCategories, type Category } from "@/db";
+import { DatePicker } from "@/components/DatePicker";
+import type { Category, NewTransaction, PaymentMethod } from "@/db";
+import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
+import { CURRENCY_LABELS } from "@/lib/currency";
+import { todayIsoDate } from "@/lib/format";
 
 const transactionFormSchema = z.object({
   type: z.enum(["income", "expense"]),
   amount: z.coerce.number().positive("El monto debe ser mayor que 0"),
+  currency: z.string().min(1, "Selecciona una moneda"),
+  paymentMethodId: z.coerce.number().int().positive("Selecciona un método de pago"),
   categoryId: z.coerce.number().int().positive("Selecciona una categoría"),
   description: z.string().trim().min(1, "La descripción es obligatoria"),
-  date: z.string().min(1, "Selecciona una fecha"),
+  date: z
+    .string()
+    .min(1, "Selecciona una fecha")
+    .refine((value) => value <= todayIsoDate(), {
+      message: "La fecha no puede ser posterior a hoy",
+    }),
 });
 
 type TransactionFormInput = z.input<typeof transactionFormSchema>;
 type TransactionFormValues = z.output<typeof transactionFormSchema>;
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 interface TransactionFormProps {
-  onTransactionCreated?: () => void;
+  categories: Category[];
+  paymentMethods: PaymentMethod[];
+  defaultCurrency: string;
+  onSubmitTransaction: (transaction: NewTransaction) => Promise<void>;
 }
 
-export function TransactionForm({ onTransactionCreated }: TransactionFormProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    listCategories()
-      .then(setCategories)
-      .catch((error) => {
-        console.error("Failed to load categories:", error);
-      });
-  }, []);
-
+export function TransactionForm({
+  categories,
+  paymentMethods,
+  defaultCurrency,
+  onSubmitTransaction,
+}: TransactionFormProps) {
   const {
     control,
     register,
@@ -58,18 +63,63 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
     defaultValues: {
       type: "expense",
       amount: 0,
+      currency: defaultCurrency,
+      paymentMethodId: undefined,
       categoryId: undefined,
       description: "",
       date: todayIsoDate(),
     },
   });
 
+  // Keep the currency field in sync with the dashboard's global currency
+  // filter, so a new transaction always defaults to whichever currency the
+  // user is currently viewing.
+  useEffect(() => {
+    setValue("currency", defaultCurrency);
+  }, [defaultCurrency, setValue]);
+
   const selectedType = watch("type");
   const selectedCategoryId = watch("categoryId");
+  const selectedCurrency = watch("currency");
+  const selectedPaymentMethodId = watch("paymentMethodId");
 
   const filteredCategories = useMemo(
     () => categories.filter((category) => category.type === selectedType),
     [categories, selectedType],
+  );
+
+  // Only accounts held in the transaction's own currency can pay for it.
+  const filteredPaymentMethods = useMemo(
+    () => paymentMethods.filter((method) => method.currency === selectedCurrency),
+    [paymentMethods, selectedCurrency],
+  );
+
+  const paymentMethodSelectItems = useMemo(
+    () =>
+      Object.fromEntries(
+        filteredPaymentMethods.map((method) => [String(method.id), method.name]),
+      ),
+    [filteredPaymentMethods],
+  );
+
+  // Keep the selected account valid whenever the currency changes or accounts load.
+  useEffect(() => {
+    const stillValid = filteredPaymentMethods.some(
+      (method) => method.id === selectedPaymentMethodId,
+    );
+    if (!stillValid) {
+      setValue("paymentMethodId", filteredPaymentMethods[0]?.id as number, {
+        shouldValidate: false,
+      });
+    }
+  }, [filteredPaymentMethods, selectedPaymentMethodId, setValue]);
+
+  const categorySelectItems = useMemo(
+    () =>
+      Object.fromEntries(
+        filteredCategories.map((category) => [String(category.id), category.name]),
+      ),
+    [filteredCategories],
   );
 
   // Keep the selected category valid whenever the type changes or categories load.
@@ -85,11 +135,12 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
   }, [filteredCategories, selectedCategoryId, setValue]);
 
   async function onSubmit(values: TransactionFormValues) {
-    await insertTransaction({
+    await onSubmitTransaction({
       amount: values.amount,
       type: values.type,
+      currency: values.currency,
       categoryId: values.categoryId,
-      paymentMethod: "cash",
+      paymentMethodId: values.paymentMethodId,
       description: values.description,
       date: values.date,
     });
@@ -97,23 +148,23 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
     reset({
       type: values.type,
       amount: 0,
+      currency: values.currency,
+      paymentMethodId: values.paymentMethodId,
       categoryId: values.categoryId,
       description: "",
       date: todayIsoDate(),
     });
-
-    onTransactionCreated?.();
   }
 
   return (
-    <Card>
+    <Card className="@container">
       <CardHeader>
         <CardTitle>Nueva transacción</CardTitle>
       </CardHeader>
       <CardContent>
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+          className="grid grid-cols-1 gap-4 @sm:grid-cols-2"
         >
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="transaction-type">Tipo</Label>
@@ -122,6 +173,7 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
               name="type"
               render={({ field }) => (
                 <Select
+                  items={TRANSACTION_TYPE_LABELS}
                   value={field.value}
                   onValueChange={(value) =>
                     field.onChange(value as TransactionFormValues["type"])
@@ -131,8 +183,12 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
                     <SelectValue placeholder="Selecciona un tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="expense">Gasto</SelectItem>
-                    <SelectItem value="income">Ingreso</SelectItem>
+                    <SelectItem value="expense">
+                      {TRANSACTION_TYPE_LABELS.expense}
+                    </SelectItem>
+                    <SelectItem value="income">
+                      {TRANSACTION_TYPE_LABELS.income}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -155,12 +211,42 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="transaction-currency">Moneda</Label>
+            <Controller
+              control={control}
+              name="currency"
+              render={({ field }) => (
+                <Select
+                  items={CURRENCY_LABELS}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger id="transaction-currency" className="w-full">
+                    <SelectValue placeholder="Selecciona una moneda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
+                      <SelectItem key={code} value={code}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.currency && (
+              <p className="text-xs text-destructive">{errors.currency.message}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="transaction-category">Categoría</Label>
             <Controller
               control={control}
               name="categoryId"
               render={({ field }) => (
                 <Select
+                  items={categorySelectItems}
                   value={field.value ? String(field.value) : ""}
                   onValueChange={(value) => field.onChange(Number(value))}
                 >
@@ -182,15 +268,65 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 @sm:col-span-2">
+            <Label htmlFor="transaction-payment-method">Método de pago</Label>
+            <Controller
+              control={control}
+              name="paymentMethodId"
+              render={({ field }) => (
+                <Select
+                  items={paymentMethodSelectItems}
+                  value={field.value ? String(field.value) : ""}
+                  onValueChange={(value) => field.onChange(Number(value))}
+                  disabled={filteredPaymentMethods.length === 0}
+                >
+                  <SelectTrigger id="transaction-payment-method" className="w-full">
+                    <SelectValue placeholder="Selecciona un método de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredPaymentMethods.map((method) => (
+                      <SelectItem key={method.id} value={String(method.id)}>
+                        {method.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {filteredPaymentMethods.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No hay cuentas en {selectedCurrency}. Crea una en Ajustes.
+              </p>
+            ) : (
+              errors.paymentMethodId && (
+                <p className="text-xs text-destructive">
+                  {errors.paymentMethodId.message}
+                </p>
+              )
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5 @sm:col-span-2">
             <Label htmlFor="transaction-date">Fecha</Label>
-            <Input id="transaction-date" type="date" {...register("date")} />
+            <Controller
+              control={control}
+              name="date"
+              render={({ field }) => (
+                <DatePicker
+                  id="transaction-date"
+                  value={field.value}
+                  onChange={field.onChange}
+                  max={new Date()}
+                  className="@sm:w-auto"
+                />
+              )}
+            />
             {errors.date && (
               <p className="text-xs text-destructive">{errors.date.message}</p>
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <div className="flex flex-col gap-1.5 @sm:col-span-2">
             <Label htmlFor="transaction-description">Descripción</Label>
             <Input
               id="transaction-description"
@@ -204,8 +340,8 @@ export function TransactionForm({ onTransactionCreated }: TransactionFormProps) 
             )}
           </div>
 
-          <div className="sm:col-span-2">
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+          <div className="@sm:col-span-2">
+            <Button type="submit" disabled={isSubmitting} className="w-full @sm:w-auto">
               {isSubmitting ? "Guardando..." : "Agregar transacción"}
             </Button>
           </div>

@@ -1,93 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
-import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SummaryCards } from "@/components/SummaryCards";
+import { MonthSelector } from "@/components/MonthSelector";
+import { CurrencyFilter } from "@/components/CurrencyFilter";
 import { TransactionForm } from "@/components/TransactionForm";
-import { initDatabase, insertRandomTransactions, listTransactions } from "@/db";
-
-const currencyFormatter = new Intl.NumberFormat("es-ES", {
-  style: "currency",
-  currency: "EUR",
-});
-
-interface Summary {
-  balance: number;
-  income: number;
-  expenses: number;
-}
-
-const EMPTY_SUMMARY: Summary = { balance: 0, income: 0, expenses: 0 };
+import { TransactionsList } from "@/components/TransactionsList";
+import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
+import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
+import { useTransactions } from "@/hooks/useTransactions";
+import { usePaymentMethods } from "@/hooks/usePaymentMethods";
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { currentMonthKey } from "@/lib/finance";
+import { DEFAULT_DASHBOARD_CURRENCY } from "@/lib/currency";
 
 export function Dashboard() {
-  const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSeeding, setIsSeeding] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [selectedCurrency, setSelectedCurrency] = useState(DEFAULT_DASHBOARD_CURRENCY);
 
-  const refreshSummary = useCallback(async () => {
-    await initDatabase();
-    const transactions = await listTransactions();
+  const {
+    transactions,
+    categories,
+    isLoading,
+    isMutating,
+    addTransaction,
+    generateSampleData,
+  } = useTransactions();
 
-    const income = transactions
-      .filter((transaction) => transaction.type === "income")
-      .reduce((total, transaction) => total + transaction.amount, 0);
+  const { paymentMethods } = usePaymentMethods();
 
-    const expenses = transactions
-      .filter((transaction) => transaction.type === "expense")
-      .reduce((total, transaction) => total + transaction.amount, 0);
-
-    setSummary({ balance: income - expenses, income, expenses });
-  }, []);
-
-  useEffect(() => {
-    refreshSummary()
-      .catch((error) => {
-        console.error("Failed to load dashboard summary:", error);
-      })
-      .finally(() => setIsLoading(false));
-  }, [refreshSummary]);
-
-  async function handleGenerateSampleData() {
-    setIsSeeding(true);
-    try {
-      await insertRandomTransactions(5);
-      await refreshSummary();
-    } catch (error) {
-      console.error("Failed to generate sample data:", error);
-    } finally {
-      setIsSeeding(false);
-    }
-  }
-
-  const summaryCards = [
-    {
-      label: "Balance Total",
-      value: summary.balance,
-      icon: Wallet,
-      tone: "default",
-    },
-    {
-      label: "Ingresos",
-      value: summary.income,
-      icon: TrendingUp,
-      tone: "positive",
-    },
-    {
-      label: "Gastos",
-      value: summary.expenses,
-      icon: TrendingDown,
-      tone: "negative",
-    },
-  ] as const;
+  const { balance, monthlySummary, categoryBreakdown, monthlyTrend, recentTransactions } =
+    useDashboardMetrics(transactions, selectedMonth, selectedCurrency);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6 sm:gap-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
@@ -98,39 +43,49 @@ export function Dashboard() {
           </p>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleGenerateSampleData}
-          disabled={isSeeding}
-        >
-          {isSeeding ? "Generando..." : "Generar Datos de Prueba"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <CurrencyFilter value={selectedCurrency} onChange={setSelectedCurrency} />
+          <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => generateSampleData()}
+            disabled={isMutating}
+          >
+            {isMutating ? "Generando..." : "Generar Datos de Prueba"}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {summaryCards.map(({ label, value, icon: Icon, tone }) => (
-          <Card key={label}>
-            <CardHeader>
-              <CardDescription>{label}</CardDescription>
-              <CardTitle
-                className={cn(
-                  "text-2xl",
-                  tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-                  tone === "negative" && "text-red-600 dark:text-red-400",
-                )}
-              >
-                {isLoading ? "—" : currencyFormatter.format(value)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Icon className="size-5 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        ))}
+      <SummaryCards
+        balance={balance}
+        monthlySummary={monthlySummary}
+        currency={selectedCurrency}
+        isLoading={isLoading}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <CategoryBreakdownChart
+          data={categoryBreakdown}
+          currency={selectedCurrency}
+          isLoading={isLoading}
+        />
+        <IncomeVsExpenseChart
+          data={monthlyTrend}
+          currency={selectedCurrency}
+          isLoading={isLoading}
+        />
       </div>
 
-      <TransactionForm onTransactionCreated={refreshSummary} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <TransactionForm
+          categories={categories}
+          paymentMethods={paymentMethods}
+          defaultCurrency={selectedCurrency}
+          onSubmitTransaction={addTransaction}
+        />
+        <TransactionsList transactions={recentTransactions} isLoading={isLoading} />
+      </div>
     </div>
   );
 }
