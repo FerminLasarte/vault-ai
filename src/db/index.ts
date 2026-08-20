@@ -35,6 +35,39 @@ export async function listCategories(): Promise<Category[]> {
   return db.select<Category[]>("SELECT * FROM categories ORDER BY name");
 }
 
+export interface NewCategory {
+  name: string;
+  type: TransactionType;
+  icon: string;
+  color: string;
+}
+
+export async function insertCategory(category: NewCategory): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO categories (name, type, color, icon) VALUES ($1, $2, $3, $4)",
+    [category.name, category.type, category.color, category.icon],
+  );
+}
+
+export async function updateCategory(id: number, category: NewCategory): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE categories SET name = $1, type = $2, color = $3, icon = $4 WHERE id = $5",
+    [category.name, category.type, category.color, category.icon, id],
+  );
+}
+
+// Transactions reference categories with a nullable FK, so deleting a category
+// detaches it from its history rather than destroying the records.
+export async function deleteCategory(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE transactions SET category_id = NULL WHERE category_id = $1", [
+    id,
+  ]);
+  await db.execute("DELETE FROM categories WHERE id = $1", [id]);
+}
+
 export async function listPaymentMethods(): Promise<PaymentMethod[]> {
   const db = await getDb();
   return db.select<PaymentMethod[]>(
@@ -104,6 +137,7 @@ export async function listTransactionsWithCategory(): Promise<
     `SELECT t.*,
             c.name AS category_name,
             c.color AS category_color,
+            c.icon AS category_icon,
             p.name AS payment_method_name
      FROM transactions t
      LEFT JOIN categories c ON c.id = t.category_id
@@ -139,6 +173,39 @@ export async function insertTransaction(
       transaction.currency,
     ],
   );
+}
+
+export async function updateTransaction(
+  id: number,
+  transaction: NewTransaction,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE transactions
+     SET amount = $1,
+         type = $2,
+         category_id = $3,
+         payment_method_id = $4,
+         description = $5,
+         date = $6,
+         currency = $7
+     WHERE id = $8`,
+    [
+      transaction.amount,
+      transaction.type,
+      transaction.categoryId,
+      transaction.paymentMethodId,
+      transaction.description,
+      transaction.date,
+      transaction.currency,
+      id,
+    ],
+  );
+}
+
+export async function deleteTransaction(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM transactions WHERE id = $1", [id]);
 }
 
 const SAMPLE_DESCRIPTIONS = [

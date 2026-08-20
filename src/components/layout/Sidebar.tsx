@@ -1,12 +1,21 @@
-import { LayoutDashboard, Settings, Wallet } from "lucide-react";
+import {
+  ChartPie,
+  Landmark,
+  Tags,
+  Wallet,
+  ArrowLeftRight,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type View = "dashboard" | "settings";
+export type View = "statistics" | "transactions" | "categories" | "accounts";
 
 const NAV_ITEMS = [
-  { view: "dashboard", label: "Resumen", icon: LayoutDashboard },
-  { view: "settings", label: "Ajustes", icon: Settings },
-] as const satisfies ReadonlyArray<{ view: View; label: string; icon: typeof Wallet }>;
+  { view: "statistics", label: "Estadísticas", icon: ChartPie },
+  { view: "transactions", label: "Transacciones", icon: ArrowLeftRight },
+  { view: "categories", label: "Categorías", icon: Tags },
+  { view: "accounts", label: "Cuentas", icon: Landmark },
+] as const satisfies ReadonlyArray<{ view: View; label: string; icon: LucideIcon }>;
 
 interface SidebarProps {
   currentView: View;

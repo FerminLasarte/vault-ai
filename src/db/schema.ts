@@ -31,6 +31,7 @@ export interface Transaction {
 export interface TransactionWithCategory extends Transaction {
   category_name: string | null;
   category_color: string | null;
+  category_icon: string | null;
   payment_method_name: string | null;
 }
 

@@ -128,6 +128,24 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // The `icon` column originally held lucide icon names. Categories are
+        // now labelled with a user-chosen emoji, so the existing seeds are
+        // translated in place and the column keeps serving the same purpose.
+        Migration {
+            version: 7,
+            description: "convert_category_icons_to_emoji",
+            sql: "
+                UPDATE categories SET icon = '💼' WHERE icon = 'briefcase';
+                UPDATE categories SET icon = '💰' WHERE icon = 'wallet';
+                UPDATE categories SET icon = '🍽️' WHERE icon = 'utensils';
+                UPDATE categories SET icon = '🚗' WHERE icon = 'car';
+                UPDATE categories SET icon = '🍿' WHERE icon = 'popcorn';
+                UPDATE categories SET icon = '📦' WHERE icon = 'more-horizontal';
+                UPDATE categories SET icon = '🏷️'
+                    WHERE icon IS NULL OR icon = '' OR icon GLOB '*[a-zA-Z-]*';
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

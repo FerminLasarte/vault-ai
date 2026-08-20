@@ -13,12 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
-import { usePaymentMethods } from "@/hooks/usePaymentMethods";
+import { useAppData } from "@/hooks/useAppData";
 import { PAYMENT_METHOD_TYPE_LABELS } from "@/lib/labels";
 import type { NewPaymentMethod, PaymentMethod } from "@/db";
 
-export function Settings() {
+export function AccountsView() {
   const {
     paymentMethods,
     isLoading,
@@ -26,7 +27,7 @@ export function Settings() {
     addPaymentMethod,
     editPaymentMethod,
     removePaymentMethod,
-  } = usePaymentMethods();
+  } = useAppData();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<PaymentMethod | null>(null);
@@ -58,21 +59,16 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Ajustes
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Gestiona tus cuentas y métodos de pago.
-          </p>
-        </div>
-
-        <Button type="button" onClick={openCreateDialog}>
-          <Plus />
-          Nueva cuenta
-        </Button>
-      </div>
+      <PageHeader
+        title="Cuentas"
+        description="Gestiona tus cuentas y métodos de pago."
+        actions={
+          <Button type="button" onClick={openCreateDialog}>
+            <Plus />
+            Nueva cuenta
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>

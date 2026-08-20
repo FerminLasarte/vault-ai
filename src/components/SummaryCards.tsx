@@ -11,28 +11,23 @@ import { formatCurrency } from "@/lib/format";
 import type { FinancialSummary } from "@/lib/finance";
 
 interface SummaryCardsProps {
-  balance: number;
-  monthlySummary: FinancialSummary;
+  // Totals for the currently selected period/filters, not an all-time balance.
+  summary: FinancialSummary;
   currency: string;
   isLoading: boolean;
 }
 
 const CARD_DEFINITIONS = [
-  { key: "balance", label: "Balance Total", icon: Wallet, tone: "default" },
-  { key: "income", label: "Ingresos del mes", icon: TrendingUp, tone: "positive" },
-  { key: "expenses", label: "Gastos del mes", icon: TrendingDown, tone: "negative" },
+  { key: "balance", label: "Balance", icon: Wallet, tone: "default" },
+  { key: "income", label: "Ingresos", icon: TrendingUp, tone: "positive" },
+  { key: "expenses", label: "Gastos", icon: TrendingDown, tone: "negative" },
 ] as const;
 
-export function SummaryCards({
-  balance,
-  monthlySummary,
-  currency,
-  isLoading,
-}: SummaryCardsProps) {
+export function SummaryCards({ summary, currency, isLoading }: SummaryCardsProps) {
   const values: Record<(typeof CARD_DEFINITIONS)[number]["key"], number> = {
-    balance,
-    income: monthlySummary.income,
-    expenses: monthlySummary.expenses,
+    balance: summary.balance,
+    income: summary.income,
+    expenses: summary.expenses,
   };
 
   return (

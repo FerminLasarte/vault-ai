@@ -41,6 +41,73 @@ export function filterByCurrency<T extends Transaction>(transactions: T[], curre
   return transactions.filter((transaction) => transaction.currency === currency);
 }
 
+// Inclusive on both ends; a null bound means "unbounded on that side".
+// Dates are "YYYY-MM-DD" strings, so lexicographic comparison is chronological.
+export function filterByDateRange<T extends Transaction>(
+  transactions: T[],
+  from: string | null,
+  to: string | null,
+): T[] {
+  return transactions.filter(
+    (transaction) =>
+      (from === null || transaction.date >= from) &&
+      (to === null || transaction.date <= to),
+  );
+}
+
+export function filterByCategory<T extends Transaction>(
+  transactions: T[],
+  categoryId: number,
+): T[] {
+  return transactions.filter((transaction) => transaction.category_id === categoryId);
+}
+
+export function filterByAmountRange<T extends Transaction>(
+  transactions: T[],
+  min: number | null,
+  max: number | null,
+): T[] {
+  return transactions.filter(
+    (transaction) =>
+      (min === null || transaction.amount >= min) &&
+      (max === null || transaction.amount <= max),
+  );
+}
+
+export interface TransactionFilters {
+  currency?: string | null;
+  categoryId?: number | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+}
+
+// Applies every provided filter in sequence. Omitted or null fields are
+// treated as "no constraint", so the same function backs both the statistics
+// filter bar and the transactions table's advanced panel.
+export function applyTransactionFilters<T extends Transaction>(
+  transactions: T[],
+  filters: TransactionFilters,
+): T[] {
+  let result = transactions;
+
+  if (filters.currency != null) {
+    result = filterByCurrency(result, filters.currency);
+  }
+  if (filters.categoryId != null) {
+    result = filterByCategory(result, filters.categoryId);
+  }
+  if (filters.dateFrom != null || filters.dateTo != null) {
+    result = filterByDateRange(result, filters.dateFrom ?? null, filters.dateTo ?? null);
+  }
+  if (filters.minAmount != null || filters.maxAmount != null) {
+    result = filterByAmountRange(result, filters.minAmount ?? null, filters.maxAmount ?? null);
+  }
+
+  return result;
+}
+
 export interface CategoryBreakdownEntry {
   categoryId: number | null;
   name: string;
@@ -91,6 +158,27 @@ export function getRecentMonthKeys(
     keys.push(currentMonthKey(new Date(year, month - 1 - i, 1)));
   }
   return keys;
+}
+
+// Ascending month keys from `fromMonthKey` to `toMonthKey` inclusive, capped
+// at `maxMonths` (keeping the most recent ones) so an extreme range can never
+// produce an unreadable chart.
+export function getMonthKeysBetween(
+  fromMonthKey: string,
+  toMonthKey: string,
+  maxMonths = 12,
+): string[] {
+  const [fromYear, fromMonth] = fromMonthKey.split("-").map(Number);
+  const [toYear, toMonth] = toMonthKey.split("-").map(Number);
+
+  const span = (toYear - fromYear) * 12 + (toMonth - fromMonth);
+  if (span < 0) return [];
+
+  const keys: string[] = [];
+  for (let i = 0; i <= span; i++) {
+    keys.push(currentMonthKey(new Date(fromYear, fromMonth - 1 + i, 1)));
+  }
+  return keys.slice(-maxMonths);
 }
 
 export interface MonthlyTrendEntry {
