@@ -1,0 +1,343 @@
+import type {
+  Category,
+  NewTransaction,
+  PaymentMethod,
+  Transaction,
+  TransactionType,
+  TransactionWithCategory,
+} from "@/db/schema";
+import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
+
+export const CSV_HEADERS = [
+  "fecha",
+  "tipo",
+  "monto",
+  "moneda",
+  "categoria",
+  "cuenta",
+  "cuenta_destino",
+  "monto_destino",
+  "descripcion",
+] as const;
+
+// Quotes a field only when it needs it, per RFC 4180: a bare value stays bare,
+// which keeps the file readable in a text editor.
+function escapeField(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function formatAmount(value: number | null): string {
+  return value === null ? "" : String(value);
+}
+
+export function transactionsToCsv(transactions: TransactionWithCategory[]): string {
+  const lines = [CSV_HEADERS.join(",")];
+
+  for (const transaction of transactions) {
+    lines.push(
+      [
+        transaction.date,
+        TRANSACTION_TYPE_LABELS[transaction.type],
+        String(transaction.amount),
+        transaction.currency,
+        transaction.category_name ?? "",
+        transaction.payment_method_name ?? "",
+        transaction.destination_payment_method_name ?? "",
+        formatAmount(transaction.destination_amount),
+        transaction.description ?? "",
+      ]
+        .map(escapeField)
+        .join(","),
+    );
+  }
+
+  // Trailing newline so the file ends the way POSIX tools expect.
+  return `${lines.join("\n")}\n`;
+}
+
+// Full RFC 4180 parse: handles quoted fields containing commas, escaped
+// quotes, and newlines inside a quoted value. Returns one array per record.
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let index = 0;
+
+  // Strip a UTF-8 BOM, which spreadsheet apps happily prepend and which would
+  // otherwise corrupt the first header name.
+  const input = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+
+  const endField = () => {
+    row.push(field);
+    field = "";
+  };
+  const endRow = () => {
+    endField();
+    rows.push(row);
+    row = [];
+  };
+
+  while (index < input.length) {
+    const char = input[index];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (input[index + 1] === '"') {
+          field += '"';
+          index += 2;
+          continue;
+        }
+        inQuotes = false;
+        index += 1;
+        continue;
+      }
+      field += char;
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      index += 1;
+      continue;
+    }
+    if (char === ",") {
+      endField();
+      index += 1;
+      continue;
+    }
+    if (char === "\r") {
+      index += 1;
+      continue;
+    }
+    if (char === "\n") {
+      endRow();
+      index += 1;
+      continue;
+    }
+
+    field += char;
+    index += 1;
+  }
+
+  // A file that does not end in a newline still has a final record pending.
+  if (field !== "" || row.length > 0) endRow();
+
+  return rows.filter((entry) => entry.length > 1 || entry[0] !== "");
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+// Accepts both the Spanish labels this app exports and the raw stored values,
+// so a file edited by hand or produced elsewhere still imports.
+function parseType(value: string): TransactionType | null {
+  const normalized = normalize(value);
+  if (normalized === "ingreso" || normalized === "income") return "income";
+  if (normalized === "gasto" || normalized === "expense") return "expense";
+  if (normalized === "transferencia" || normalized === "transfer") return "transfer";
+  return null;
+}
+
+function parseNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// The shape check alone would wave through "2026-13-99" and "2026-02-30", so
+// the parts are rebuilt into a Date and compared back.
+function isValidIsoDate(value: string): boolean {
+  if (!ISO_DATE.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+export interface ImportSkip {
+  line: number;
+  reason: string;
+}
+
+export interface ImportPlan {
+  ready: NewTransaction[];
+  skipped: ImportSkip[];
+  duplicates: number;
+}
+
+export interface ImportContext {
+  categories: Category[];
+  accounts: PaymentMethod[];
+  existing: Transaction[];
+  supportedCurrencies: string[];
+}
+
+// Identifies a movement closely enough to catch a file being imported twice,
+// without needing an id that a hand-edited file would not carry.
+function duplicateKey(
+  date: string,
+  type: string,
+  amount: number,
+  currency: string,
+  description: string,
+): string {
+  return [date, type, amount, currency, normalize(description)].join("|");
+}
+
+export function buildImportPlan(rows: string[][], context: ImportContext): ImportPlan {
+  const ready: NewTransaction[] = [];
+  const skipped: ImportSkip[] = [];
+  let duplicates = 0;
+
+  if (rows.length === 0) {
+    return { ready, skipped, duplicates };
+  }
+
+  const header = rows[0].map(normalize);
+  const column = (name: string) => header.indexOf(name);
+  const missing = CSV_HEADERS.filter((name) => column(name) === -1);
+  if (missing.length > 0) {
+    return {
+      ready,
+      skipped: [
+        { line: 1, reason: `Faltan columnas obligatorias: ${missing.join(", ")}` },
+      ],
+      duplicates,
+    };
+  }
+
+  const categoryByName = new Map(
+    context.categories.map((category) => [normalize(category.name), category]),
+  );
+  const accountByName = new Map(
+    context.accounts.map((account) => [normalize(account.name), account]),
+  );
+
+  const seen = new Set(
+    context.existing.map((transaction) =>
+      duplicateKey(
+        transaction.date,
+        transaction.type,
+        transaction.amount,
+        transaction.currency,
+        transaction.description ?? "",
+      ),
+    ),
+  );
+
+  for (let index = 1; index < rows.length; index++) {
+    const row = rows[index];
+    // Header row is line 1, so the first data row is line 2.
+    const line = index + 1;
+    const cell = (name: string) => (row[column(name)] ?? "").trim();
+
+    const date = cell("fecha");
+    if (!isValidIsoDate(date)) {
+      skipped.push({ line, reason: `Fecha inválida: "${date}" (se espera AAAA-MM-DD)` });
+      continue;
+    }
+
+    const type = parseType(cell("tipo"));
+    if (type === null) {
+      skipped.push({ line, reason: `Tipo desconocido: "${cell("tipo")}"` });
+      continue;
+    }
+
+    const amount = parseNumber(cell("monto"));
+    if (amount === null || amount <= 0) {
+      skipped.push({ line, reason: `Monto inválido: "${cell("monto")}"` });
+      continue;
+    }
+
+    const currency = cell("moneda").toUpperCase();
+    if (!context.supportedCurrencies.includes(currency)) {
+      skipped.push({ line, reason: `Moneda no admitida: "${currency}"` });
+      continue;
+    }
+
+    const description = cell("descripcion");
+    if (description === "") {
+      skipped.push({ line, reason: "Falta la descripción" });
+      continue;
+    }
+
+    // An empty account is allowed and lands unattached; a name that does not
+    // match anything is a mistake worth reporting rather than silently dropping.
+    const accountName = cell("cuenta");
+    const account = accountName === "" ? null : accountByName.get(normalize(accountName));
+    if (accountName !== "" && account === undefined) {
+      skipped.push({ line, reason: `Cuenta desconocida: "${accountName}"` });
+      continue;
+    }
+
+    let categoryId: number | null = null;
+    let destinationId: number | null = null;
+    let destinationAmount: number | null = null;
+
+    if (type === "transfer") {
+      const destinationName = cell("cuenta_destino");
+      const destination = accountByName.get(normalize(destinationName));
+      if (destination === undefined) {
+        skipped.push({
+          line,
+          reason: `Cuenta de destino desconocida: "${destinationName}"`,
+        });
+        continue;
+      }
+      destinationId = destination.id;
+      // An omitted destination amount means the transfer did not change
+      // currency, so the same figure lands on the other side.
+      destinationAmount = parseNumber(cell("monto_destino")) ?? amount;
+    } else {
+      const categoryName = cell("categoria");
+      if (categoryName !== "") {
+        const category = categoryByName.get(normalize(categoryName));
+        if (category === undefined) {
+          skipped.push({ line, reason: `Categoría desconocida: "${categoryName}"` });
+          continue;
+        }
+        categoryId = category.id;
+      }
+    }
+
+    const key = duplicateKey(date, type, amount, currency, description);
+    if (seen.has(key)) {
+      duplicates += 1;
+      continue;
+    }
+    // Also guards against the same row appearing twice within one file.
+    seen.add(key);
+
+    ready.push({
+      amount,
+      type,
+      currency,
+      categoryId,
+      paymentMethodId: account?.id ?? null,
+      destinationPaymentMethodId: destinationId,
+      destinationAmount,
+      description,
+      date,
+    });
+  }
+
+  return { ready, skipped, duplicates };
+}

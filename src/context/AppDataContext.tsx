@@ -11,35 +11,47 @@ import {
   deleteCategory,
   deletePaymentMethod,
   deleteTransaction,
+  getLatestExchangeRate,
   initDatabase,
   insertCategory,
   insertPaymentMethod,
-  insertRandomTransactions,
   insertTransaction,
+  insertTransactions,
   listCategories,
   listPaymentMethods,
   listTransactionsWithCategory,
   updateCategory,
   updatePaymentMethod,
   updateTransaction,
+  upsertExchangeRate,
   type Category,
+  type ExchangeRate,
   type NewCategory,
   type NewPaymentMethod,
   type NewTransaction,
   type PaymentMethod,
   type TransactionWithCategory,
 } from "@/db";
+import {
+  fetchMepRate,
+  MANUAL_RATE_SOURCE,
+} from "@/lib/exchangeRate";
+import { todayIsoDate } from "@/lib/format";
 
 export interface AppData {
   transactions: TransactionWithCategory[];
   categories: Category[];
   paymentMethods: PaymentMethod[];
+  // Latest known MEP quote, or null before the very first successful fetch.
+  exchangeRate: ExchangeRate | null;
   isLoading: boolean;
   isMutating: boolean;
+  isRefreshingRate: boolean;
 
   addTransaction: (transaction: NewTransaction) => Promise<void>;
   editTransaction: (id: number, transaction: NewTransaction) => Promise<void>;
   removeTransaction: (id: number) => Promise<void>;
+  importTransactions: (transactions: NewTransaction[]) => Promise<void>;
 
   addCategory: (category: NewCategory) => Promise<void>;
   editCategory: (id: number, category: NewCategory) => Promise<void>;
@@ -49,7 +61,9 @@ export interface AppData {
   editPaymentMethod: (id: number, method: NewPaymentMethod) => Promise<void>;
   removePaymentMethod: (id: number) => Promise<void>;
 
-  generateSampleData: (count?: number) => Promise<void>;
+  refreshExchangeRate: (options?: { silent?: boolean }) => Promise<void>;
+  saveManualExchangeRate: (buy: number, sell: number) => Promise<void>;
+
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -59,19 +73,68 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
+  const [isRefreshingRate, setIsRefreshingRate] = useState(false);
 
   const refresh = useCallback(async () => {
     await initDatabase();
-    const [nextTransactions, nextCategories, nextPaymentMethods] = await Promise.all([
-      listTransactionsWithCategory(),
-      listCategories(),
-      listPaymentMethods(),
-    ]);
+    const [nextTransactions, nextCategories, nextPaymentMethods, cachedRate] =
+      await Promise.all([
+        listTransactionsWithCategory(),
+        listCategories(),
+        listPaymentMethods(),
+        getLatestExchangeRate(),
+      ]);
     setTransactions(nextTransactions);
     setCategories(nextCategories);
     setPaymentMethods(nextPaymentMethods);
+    setExchangeRate(cachedRate);
+  }, []);
+
+  // Fetches the current quote and caches it. A failure is not exceptional —
+  // the app is local-first and expected to run offline — so the cached rate is
+  // kept and only an explicit, user-triggered refresh reports the problem.
+  const refreshExchangeRate = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      setIsRefreshingRate(true);
+      try {
+        const rate = await fetchMepRate();
+        await upsertExchangeRate(rate);
+        setExchangeRate(rate);
+        if (!silent) toast.success("Cotización actualizada");
+      } catch (error) {
+        console.error("Failed to refresh the exchange rate:", error);
+        if (!silent) {
+          toast.error("No se pudo obtener la cotización", { id: "exchange-rate" });
+        }
+      } finally {
+        setIsRefreshingRate(false);
+      }
+    },
+    [],
+  );
+
+  // A manual correction is stored under today's date, overwriting whatever was
+  // fetched for today, and is marked as such so the UI can say so.
+  const saveManualExchangeRate = useCallback(async (buy: number, sell: number) => {
+    const rate: ExchangeRate = {
+      date: todayIsoDate(),
+      buy,
+      sell,
+      source: MANUAL_RATE_SOURCE,
+      fetched_at: new Date().toISOString(),
+    };
+    try {
+      await upsertExchangeRate(rate);
+      setExchangeRate(rate);
+      toast.success("Cotización guardada");
+    } catch (error) {
+      console.error("Failed to save the manual exchange rate:", error);
+      toast.error("No se pudo guardar la cotización");
+      throw error;
+    }
   }, []);
 
   useEffect(() => {
@@ -84,6 +147,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })
       .finally(() => setIsLoading(false));
   }, [refresh]);
+
+  // Deliberately waits for the initial load: `refresh` reads the cached rate
+  // from the database, and starting the network fetch in parallel would let a
+  // slow read overwrite the fresher figure the fetch just stored.
+  useEffect(() => {
+    if (isLoading) return;
+    void refreshExchangeRate({ silent: true });
+  }, [isLoading, refreshExchangeRate]);
 
   // Every mutation reloads the whole dataset, so a change made in one view is
   // immediately reflected in the statistics and in every other view.
@@ -110,8 +181,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       transactions,
       categories,
       paymentMethods,
+      exchangeRate,
       isLoading,
       isMutating,
+      isRefreshingRate,
+
+      refreshExchangeRate,
+      saveManualExchangeRate,
 
       addTransaction: (transaction) =>
         runMutation(
@@ -130,6 +206,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           () => deleteTransaction(id),
           "Transacción eliminada",
           "No se pudo eliminar la transacción",
+        ),
+      importTransactions: (imported) =>
+        runMutation(
+          () => insertTransactions(imported),
+          `${imported.length} transacciones importadas`,
+          "No se pudieron importar las transacciones",
         ),
 
       addCategory: (category) =>
@@ -170,14 +252,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           "No se pudo eliminar la cuenta",
         ),
 
-      generateSampleData: (count = 5) =>
-        runMutation(
-          () => insertRandomTransactions(count),
-          "Datos de prueba generados",
-          "No se pudieron generar los datos de prueba",
-        ),
     }),
-    [transactions, categories, paymentMethods, isLoading, isMutating, runMutation],
+    [
+      transactions,
+      categories,
+      paymentMethods,
+      exchangeRate,
+      isLoading,
+      isMutating,
+      isRefreshingRate,
+      refreshExchangeRate,
+      saveManualExchangeRate,
+      runMutation,
+    ],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

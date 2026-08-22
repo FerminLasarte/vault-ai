@@ -6,6 +6,7 @@ import { CurrencyFilter } from "@/components/CurrencyFilter";
 import { CategorySelect } from "@/components/filters/CategorySelect";
 import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
 import { SummaryCards } from "@/components/SummaryCards";
+import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
@@ -18,14 +19,14 @@ import {
   getRecentMonthKeys,
   groupExpensesByCategory,
 } from "@/lib/finance";
-import { DEFAULT_DASHBOARD_CURRENCY } from "@/lib/currency";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
 const TREND_MONTHS = 6;
 
 export function StatisticsView() {
-  const { transactions, categories, isLoading } = useAppData();
+  const { transactions, categories, exchangeRate, isLoading } = useAppData();
 
-  const [currency, setCurrency] = useState(DEFAULT_DASHBOARD_CURRENCY);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState(EMPTY_DATE_RANGE);
 
@@ -97,7 +98,15 @@ export function StatisticsView() {
         </CardContent>
       </Card>
 
-      <SummaryCards summary={summary} currency={currency} isLoading={isLoading} />
+      <div className="flex flex-col gap-3">
+        <SummaryCards
+          summary={summary}
+          currency={currency}
+          isLoading={isLoading}
+          rate={exchangeRate?.sell ?? null}
+        />
+        <ExchangeRateBar />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <CategoryBreakdownChart

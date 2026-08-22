@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,19 +21,58 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
+import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { useAppData } from "@/hooks/useAppData";
+import {
+  calculateAccountBalances,
+  consolidateByCurrency,
+  totalBalanceByCurrency,
+} from "@/lib/finance";
+import { formatCurrency } from "@/lib/format";
 import { PAYMENT_METHOD_TYPE_LABELS } from "@/lib/labels";
+import { cn } from "@/lib/utils";
 import type { NewPaymentMethod, PaymentMethod } from "@/db";
 
 export function AccountsView() {
   const {
     paymentMethods,
+    transactions,
+    exchangeRate,
     isLoading,
     isMutating,
     addPaymentMethod,
     editPaymentMethod,
     removePaymentMethod,
   } = useAppData();
+
+  // Balances are derived, never stored: recomputing them from the movements
+  // keeps them correct after any edit or deletion, with nothing to resync.
+  const balances = useMemo(
+    () => calculateAccountBalances(paymentMethods, transactions),
+    [paymentMethods, transactions],
+  );
+
+  const totalsByCurrency = useMemo(
+    () => totalBalanceByCurrency(paymentMethods, balances),
+    [paymentMethods, balances],
+  );
+
+  const currencyTotals = useMemo(
+    () => Array.from(totalsByCurrency),
+    [totalsByCurrency],
+  );
+
+  // Null whenever there is no usable rate yet, which the card reports instead
+  // of showing a total that silently leaves one currency out.
+  const netWorthArs = useMemo(
+    () => consolidateByCurrency(totalsByCurrency, "ARS", exchangeRate?.sell ?? 0),
+    [totalsByCurrency, exchangeRate],
+  );
+
+  const netWorthUsd = useMemo(
+    () => consolidateByCurrency(totalsByCurrency, "USD", exchangeRate?.sell ?? 0),
+    [totalsByCurrency, exchangeRate],
+  );
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<PaymentMethod | null>(null);
@@ -70,6 +115,41 @@ export function AccountsView() {
         }
       />
 
+      {!isLoading && currencyTotals.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {currencyTotals.map(([currency, total]) => (
+              <Card key={currency}>
+                <CardHeader>
+                  <CardDescription>Total en {currency}</CardDescription>
+                  <CardTitle className="text-2xl">
+                    {formatCurrency(total, currency)}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            ))}
+
+            <Card>
+              <CardHeader>
+                <CardDescription>Patrimonio total</CardDescription>
+                <CardTitle className="text-2xl">
+                  {netWorthArs === null
+                    ? "—"
+                    : formatCurrency(netWorthArs, "ARS")}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {netWorthUsd === null
+                    ? "Necesita una cotización para consolidar"
+                    : `≈ ${formatCurrency(netWorthUsd, "USD")}`}
+                </p>
+              </CardHeader>
+            </Card>
+          </div>
+
+          <ExchangeRateBar />
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Cuentas y métodos de pago</CardTitle>
@@ -103,6 +183,16 @@ export function AccountsView() {
                       <Badge variant="outline">{method.currency}</Badge>
                     </div>
                   </div>
+
+                  <span
+                    className={cn(
+                      "shrink-0 text-sm font-medium tabular-nums",
+                      (balances.get(method.id) ?? 0) < 0 &&
+                        "text-red-600 dark:text-red-400",
+                    )}
+                  >
+                    {formatCurrency(balances.get(method.id) ?? 0, method.currency)}
+                  </span>
 
                   <div className="flex shrink-0 items-center gap-1">
                     <Button

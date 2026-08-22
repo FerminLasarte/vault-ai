@@ -37,5 +37,15 @@ src-tauri/gen/schemas
 *.sln
 *.sw?
 
+# Personal data — never commit. The app writes SQLite files and CSV exports,
+# and a backup saved into the project folder would otherwise be picked up by
+# `git add .` and published along with the repository.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.csv
+
 # OS files
 .DS_Store

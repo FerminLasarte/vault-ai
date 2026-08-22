@@ -20,20 +20,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DASHBOARD_CURRENCIES } from "@/lib/currency";
+import { CURRENCY_CODES } from "@/lib/currency";
 import { PAYMENT_METHOD_TYPE_LABELS, PAYMENT_METHOD_TYPES } from "@/lib/labels";
 import type { NewPaymentMethod, PaymentMethod, PaymentMethodType } from "@/db";
 
 const paymentMethodSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),
-  type: z.enum(["bank", "cash", "wallet", "card"]),
+  type: z.enum(["bank", "cash", "wallet", "card", "other"]),
   currency: z.string().min(1, "Selecciona una moneda"),
+  // Negative values are legitimate here: a credit card account starts in debt.
+  initialBalance: z.coerce.number("Introduce un saldo válido"),
 });
 
+type PaymentMethodFormInput = z.input<typeof paymentMethodSchema>;
 type PaymentMethodFormValues = z.output<typeof paymentMethodSchema>;
 
+const EMPTY_METHOD: PaymentMethodFormInput = {
+  name: "",
+  type: "bank",
+  currency: CURRENCY_CODES[0],
+  initialBalance: 0,
+};
+
 const CURRENCY_ITEMS = Object.fromEntries(
-  DASHBOARD_CURRENCIES.map((currency) => [currency, currency]),
+  CURRENCY_CODES.map((currency) => [currency, currency]),
 );
 
 interface PaymentMethodDialogProps {
@@ -56,9 +66,9 @@ export function PaymentMethodDialog({
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<PaymentMethodFormValues, unknown, PaymentMethodFormValues>({
+  } = useForm<PaymentMethodFormInput, unknown, PaymentMethodFormValues>({
     resolver: zodResolver(paymentMethodSchema),
-    defaultValues: { name: "", type: "bank", currency: DASHBOARD_CURRENCIES[0] },
+    defaultValues: EMPTY_METHOD,
   });
 
   // Reload the form whenever the dialog opens so it reflects the row being
@@ -67,8 +77,13 @@ export function PaymentMethodDialog({
     if (!open) return;
     reset(
       editing
-        ? { name: editing.name, type: editing.type, currency: editing.currency }
-        : { name: "", type: "bank", currency: DASHBOARD_CURRENCIES[0] },
+        ? {
+            name: editing.name,
+            type: editing.type,
+            currency: editing.currency,
+            initialBalance: editing.initial_balance,
+          }
+        : EMPTY_METHOD,
     );
   }, [open, editing, reset]);
 
@@ -141,7 +156,7 @@ export function PaymentMethodDialog({
                     <SelectValue placeholder="Selecciona una moneda" />
                   </SelectTrigger>
                   <SelectContent>
-                    {DASHBOARD_CURRENCIES.map((currency) => (
+                    {CURRENCY_CODES.map((currency) => (
                       <SelectItem key={currency} value={currency}>
                         {currency}
                       </SelectItem>
@@ -152,6 +167,26 @@ export function PaymentMethodDialog({
             />
             {errors.currency && (
               <p className="text-xs text-destructive">{errors.currency.message}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="payment-method-initial-balance">Saldo inicial</Label>
+            <Input
+              id="payment-method-initial-balance"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              {...register("initialBalance")}
+            />
+            <p className="text-xs text-muted-foreground">
+              El saldo que tenía la cuenta antes de empezar a registrar movimientos
+              aquí. Puede ser negativo.
+            </p>
+            {errors.initialBalance && (
+              <p className="text-xs text-destructive">
+                {errors.initialBalance.message}
+              </p>
             )}
           </div>
 

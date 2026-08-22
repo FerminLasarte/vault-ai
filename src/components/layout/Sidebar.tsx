@@ -4,17 +4,24 @@ import {
   Tags,
   Wallet,
   ArrowLeftRight,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type View = "statistics" | "transactions" | "categories" | "accounts";
+export type View =
+  | "statistics"
+  | "transactions"
+  | "categories"
+  | "accounts"
+  | "settings";
 
 const NAV_ITEMS = [
   { view: "statistics", label: "Estadísticas", icon: ChartPie },
   { view: "transactions", label: "Transacciones", icon: ArrowLeftRight },
   { view: "categories", label: "Categorías", icon: Tags },
   { view: "accounts", label: "Cuentas", icon: Landmark },
+  { view: "settings", label: "Ajustes", icon: Settings },
 ] as const satisfies ReadonlyArray<{ view: View; label: string; icon: LucideIcon }>;
 
 interface SidebarProps {

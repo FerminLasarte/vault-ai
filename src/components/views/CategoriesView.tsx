@@ -15,10 +15,10 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryDialog } from "@/components/CategoryDialog";
 import { useAppData } from "@/hooks/useAppData";
-import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
-import type { Category, NewCategory, TransactionType } from "@/db";
+import { CATEGORY_TYPE_LABELS } from "@/lib/labels";
+import type { Category, CategoryType, NewCategory } from "@/db";
 
-const GROUPS: { type: TransactionType; title: string }[] = [
+const GROUPS: { type: CategoryType; title: string }[] = [
   { type: "income", title: "Categorías de ingreso" },
   { type: "expense", title: "Categorías de gasto" },
 ];
@@ -173,7 +173,7 @@ export function CategoriesView() {
             <AlertDialogTitle>¿Eliminar esta categoría?</AlertDialogTitle>
             <AlertDialogDescription>
               Se eliminará «{pendingDeletion?.name}» (
-              {pendingDeletion ? TRANSACTION_TYPE_LABELS[pendingDeletion.type] : ""}).
+              {pendingDeletion ? CATEGORY_TYPE_LABELS[pendingDeletion.type] : ""}).
               Las transacciones ya registradas se conservan, pero quedarán sin
               categoría asociada.
             </AlertDialogDescription>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Transaction, TransactionWithCategory } from "@/db/schema";
+import type { PaymentMethod, Transaction, TransactionWithCategory } from "@/db/schema";
 import {
   applyTransactionFilters,
   buildMonthlyTrend,
@@ -8,12 +8,17 @@ import {
   filterByAmountRange,
   filterByCategory,
   filterByCurrency,
+  filterBySearch,
   filterByDateRange,
   filterByMonth,
   getMonthKeysBetween,
   getRecentMonthKeys,
   groupExpensesByCategory,
   sumByType,
+  calculateAccountBalances,
+  totalBalanceByCurrency,
+  convertAmount,
+  consolidateByCurrency,
 } from "@/lib/finance";
 
 function makeTransaction(overrides: Partial<Transaction>): Transaction {
@@ -23,9 +28,11 @@ function makeTransaction(overrides: Partial<Transaction>): Transaction {
     type: "expense",
     category_id: null,
     payment_method_id: null,
+    destination_payment_method_id: null,
+    destination_amount: null,
     description: "",
     date: "2026-01-01",
-    currency: "EUR",
+    currency: "ARS",
     ...overrides,
   };
 }
@@ -39,6 +46,8 @@ function makeTransactionWithCategory(
     category_color: null,
     category_icon: null,
     payment_method_name: null,
+    destination_payment_method_name: null,
+    destination_currency: null,
     ...overrides,
   };
 }
@@ -167,7 +176,7 @@ describe("filterByCurrency", () => {
   });
 
   it("returns an empty array when no transaction matches the currency", () => {
-    const transactions = [makeTransaction({ currency: "EUR" })];
+    const transactions = [makeTransaction({ currency: "USD" })];
     expect(filterByCurrency(transactions, "ARS")).toEqual([]);
   });
 });
@@ -441,5 +450,243 @@ describe("applyTransactionFilters", () => {
     expect(
       applyTransactionFilters(transactions, { currency: "ARS", minAmount: 10_000 }),
     ).toEqual([]);
+  });
+});
+
+function makeAccount(overrides: Partial<PaymentMethod>): PaymentMethod {
+  return {
+    id: 1,
+    name: "Cuenta",
+    type: "bank",
+    currency: "ARS",
+    initial_balance: 0,
+    ...overrides,
+  };
+}
+
+describe("calculateAccountBalances", () => {
+  it("starts every account at its initial balance", () => {
+    const accounts = [makeAccount({ id: 1, initial_balance: 500 })];
+    expect(calculateAccountBalances(accounts, []).get(1)).toBe(500);
+  });
+
+  it("adds income and subtracts expenses on the owning account", () => {
+    const accounts = [makeAccount({ id: 1, initial_balance: 100 })];
+    const transactions = [
+      makeTransaction({ id: 1, type: "income", amount: 50, payment_method_id: 1 }),
+      makeTransaction({ id: 2, type: "expense", amount: 30, payment_method_id: 1 }),
+    ];
+    expect(calculateAccountBalances(accounts, transactions).get(1)).toBe(120);
+  });
+
+  it("leaves other accounts untouched", () => {
+    const accounts = [
+      makeAccount({ id: 1, initial_balance: 100 }),
+      makeAccount({ id: 2, initial_balance: 100 }),
+    ];
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 40, payment_method_id: 1 }),
+    ];
+    const balances = calculateAccountBalances(accounts, transactions);
+    expect(balances.get(1)).toBe(60);
+    expect(balances.get(2)).toBe(100);
+  });
+
+  it("moves money from the origin to the destination on a transfer", () => {
+    const accounts = [
+      makeAccount({ id: 1, initial_balance: 1000 }),
+      makeAccount({ id: 2, initial_balance: 0 }),
+    ];
+    const transactions = [
+      makeTransaction({
+        id: 1,
+        type: "transfer",
+        amount: 300,
+        payment_method_id: 1,
+        destination_payment_method_id: 2,
+        destination_amount: 300,
+      }),
+    ];
+    const balances = calculateAccountBalances(accounts, transactions);
+    expect(balances.get(1)).toBe(700);
+    expect(balances.get(2)).toBe(300);
+  });
+
+  it("credits the destination its own amount on a cross-currency transfer", () => {
+    const accounts = [
+      makeAccount({ id: 1, currency: "ARS", initial_balance: 200_000 }),
+      makeAccount({ id: 2, currency: "USD", initial_balance: 0 }),
+    ];
+    const transactions = [
+      makeTransaction({
+        id: 1,
+        type: "transfer",
+        amount: 145_000,
+        currency: "ARS",
+        payment_method_id: 1,
+        destination_payment_method_id: 2,
+        destination_amount: 100,
+      }),
+    ];
+    const balances = calculateAccountBalances(accounts, transactions);
+    expect(balances.get(1)).toBe(55_000);
+    expect(balances.get(2)).toBe(100);
+  });
+
+  it("leaves a transfer out of the income and expense totals", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "income", amount: 100 }),
+      makeTransaction({ id: 2, type: "expense", amount: 40 }),
+      makeTransaction({ id: 3, type: "transfer", amount: 1000 }),
+    ];
+    expect(calculateSummary(transactions)).toEqual({
+      balance: 60,
+      income: 100,
+      expenses: 40,
+    });
+  });
+
+  it("ignores movements whose account no longer exists", () => {
+    const accounts = [makeAccount({ id: 1, initial_balance: 100 })];
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 50, payment_method_id: 99 }),
+      makeTransaction({ id: 2, type: "expense", amount: 50, payment_method_id: null }),
+    ];
+    const balances = calculateAccountBalances(accounts, transactions);
+    expect(balances.get(1)).toBe(100);
+    expect(balances.has(99)).toBe(false);
+  });
+
+  it("still debits the origin when the destination account was deleted", () => {
+    const accounts = [makeAccount({ id: 1, initial_balance: 500 })];
+    const transactions = [
+      makeTransaction({
+        id: 1,
+        type: "transfer",
+        amount: 200,
+        payment_method_id: 1,
+        destination_payment_method_id: 99,
+        destination_amount: 200,
+      }),
+    ];
+    expect(calculateAccountBalances(accounts, transactions).get(1)).toBe(300);
+  });
+});
+
+describe("totalBalanceByCurrency", () => {
+  it("sums the accounts of each currency separately", () => {
+    const accounts = [
+      makeAccount({ id: 1, currency: "ARS" }),
+      makeAccount({ id: 2, currency: "ARS" }),
+      makeAccount({ id: 3, currency: "USD" }),
+    ];
+    const balances = new Map([
+      [1, 100],
+      [2, 250],
+      [3, 40],
+    ]);
+    const totals = totalBalanceByCurrency(accounts, balances);
+    expect(totals.get("ARS")).toBe(350);
+    expect(totals.get("USD")).toBe(40);
+  });
+
+  it("returns no entries when there are no accounts", () => {
+    expect(totalBalanceByCurrency([], new Map()).size).toBe(0);
+  });
+});
+
+describe("convertAmount", () => {
+  it("returns the amount untouched when both currencies match", () => {
+    expect(convertAmount(100, "ARS", "ARS", 1500)).toBe(100);
+  });
+
+  it("divides by the rate going from ARS to USD", () => {
+    expect(convertAmount(150_000, "ARS", "USD", 1500)).toBe(100);
+  });
+
+  it("multiplies by the rate going from USD to ARS", () => {
+    expect(convertAmount(100, "USD", "ARS", 1500)).toBe(150_000);
+  });
+
+  it("round trips back to the original amount", () => {
+    const converted = convertAmount(1234, "ARS", "USD", 1545.3) as number;
+    expect(convertAmount(converted, "USD", "ARS", 1545.3)).toBeCloseTo(1234, 6);
+  });
+
+  it("refuses to convert with a missing or nonsensical rate", () => {
+    expect(convertAmount(100, "ARS", "USD", 0)).toBeNull();
+    expect(convertAmount(100, "ARS", "USD", -5)).toBeNull();
+    expect(convertAmount(100, "ARS", "USD", Number.NaN)).toBeNull();
+  });
+
+  it("refuses to convert an unsupported currency", () => {
+    expect(convertAmount(100, "EUR", "USD", 1500)).toBeNull();
+  });
+});
+
+describe("consolidateByCurrency", () => {
+  it("adds every currency once converted to the target", () => {
+    const totals = new Map([
+      ["ARS", 150_000],
+      ["USD", 50],
+    ]);
+    expect(consolidateByCurrency(totals, "USD", 1500)).toBe(150);
+  });
+
+  it("returns zero when there is nothing to consolidate", () => {
+    expect(consolidateByCurrency(new Map(), "USD", 1500)).toBe(0);
+  });
+
+  it("returns null rather than under-reporting when a rate is unusable", () => {
+    const totals = new Map([
+      ["ARS", 150_000],
+      ["USD", 50],
+    ]);
+    expect(consolidateByCurrency(totals, "USD", 0)).toBeNull();
+  });
+});
+
+describe("filterBySearch", () => {
+  const transactions = [
+    makeTransaction({ id: 1, description: "Nómina de agosto" }),
+    makeTransaction({ id: 2, description: "Supermercado Coto" }),
+    makeTransaction({ id: 3, description: "Cena fuera" }),
+  ];
+
+  it("matches a plain substring", () => {
+    expect(filterBySearch(transactions, "super").map((t) => t.id)).toEqual([2]);
+  });
+
+  it("ignores case", () => {
+    expect(filterBySearch(transactions, "COTO").map((t) => t.id)).toEqual([2]);
+  });
+
+  it("matches an accented description typed without accents", () => {
+    expect(filterBySearch(transactions, "nomina").map((t) => t.id)).toEqual([1]);
+  });
+
+  it("matches an unaccented description typed with accents", () => {
+    expect(filterBySearch(transactions, "cená").map((t) => t.id)).toEqual([3]);
+  });
+
+  it("treats an empty or blank query as no constraint", () => {
+    expect(filterBySearch(transactions, "")).toHaveLength(3);
+    expect(filterBySearch(transactions, "   ")).toHaveLength(3);
+  });
+
+  it("returns nothing when there is no match", () => {
+    expect(filterBySearch(transactions, "zzz")).toEqual([]);
+  });
+
+  it("combines with the other filters", () => {
+    const mixed = [
+      makeTransaction({ id: 1, description: "Cena fuera", currency: "ARS" }),
+      makeTransaction({ id: 2, description: "Cena fuera", currency: "USD" }),
+    ];
+    expect(
+      applyTransactionFilters(mixed, { search: "cena", currency: "USD" }).map(
+        (t) => t.id,
+      ),
+    ).toEqual([2]);
   });
 });

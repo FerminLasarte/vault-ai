@@ -3,24 +3,23 @@ export interface CurrencyOption {
   label: string;
 }
 
-export const DEFAULT_CURRENCY = "EUR";
-
+// The app deliberately supports exactly these two currencies. Every currency
+// selector, filter and account reads from this single list, so a transaction
+// can never be saved in a currency the rest of the app is unable to show —
+// which used to hide it from every view permanently.
 export const CURRENCIES: CurrencyOption[] = [
-  { code: "EUR", label: "Euro (€)" },
-  { code: "USD", label: "Dólar estadounidense ($)" },
-  { code: "GBP", label: "Libra esterlina (£)" },
-  { code: "MXN", label: "Peso mexicano ($)" },
   { code: "ARS", label: "Peso argentino ($)" },
-  { code: "COP", label: "Peso colombiano ($)" },
-  { code: "CLP", label: "Peso chileno ($)" },
-  { code: "PEN", label: "Sol peruano (S/)" },
+  { code: "USD", label: "Dólar estadounidense (US$)" },
 ];
+
+export const CURRENCY_CODES: string[] = CURRENCIES.map((currency) => currency.code);
 
 export const CURRENCY_LABELS: Record<string, string> = Object.fromEntries(
   CURRENCIES.map((currency) => [currency.code, currency.label]),
 );
 
-// The two currencies the dashboard's global filter can segregate by.
-export const DASHBOARD_CURRENCIES = ["ARS", "USD"] as const;
+export const DEFAULT_CURRENCY = "ARS";
 
-export const DEFAULT_DASHBOARD_CURRENCY: string = "ARS";
+export function isSupportedCurrency(code: string): boolean {
+  return CURRENCY_CODES.includes(code);
+}

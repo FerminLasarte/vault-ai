@@ -20,14 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
+import { CATEGORY_TYPE_LABELS } from "@/lib/labels";
 import {
   DEFAULT_CATEGORY_EMOJI,
   EMOJI_SUGGESTIONS,
   isSingleEmoji,
 } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
-import type { Category, NewCategory, TransactionType } from "@/db";
+import type { Category, CategoryType, NewCategory } from "@/db";
 
 const DEFAULT_COLOR = "#64748b";
 
@@ -136,19 +136,19 @@ export function CategoryDialog({
               name="type"
               render={({ field }) => (
                 <Select
-                  items={TRANSACTION_TYPE_LABELS}
+                  items={CATEGORY_TYPE_LABELS}
                   value={field.value}
-                  onValueChange={(value) => field.onChange(value as TransactionType)}
+                  onValueChange={(value) => field.onChange(value as CategoryType)}
                 >
                   <SelectTrigger id="category-type" className="w-full">
                     <SelectValue placeholder="Selecciona un tipo" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="expense">
-                      {TRANSACTION_TYPE_LABELS.expense}
+                      {CATEGORY_TYPE_LABELS.expense}
                     </SelectItem>
                     <SelectItem value="income">
-                      {TRANSACTION_TYPE_LABELS.income}
+                      {CATEGORY_TYPE_LABELS.income}
                     </SelectItem>
                   </SelectContent>
                 </Select>

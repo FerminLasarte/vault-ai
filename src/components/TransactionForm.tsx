@@ -22,21 +22,61 @@ import type {
 import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
 import { CURRENCY_LABELS } from "@/lib/currency";
 import { todayIsoDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-const transactionFormSchema = z.object({
-  type: z.enum(["income", "expense"]),
-  amount: z.coerce.number().positive("El monto debe ser mayor que 0"),
-  currency: z.string().min(1, "Selecciona una moneda"),
-  paymentMethodId: z.coerce.number().int().positive("Selecciona un método de pago"),
-  categoryId: z.coerce.number().int().positive("Selecciona una categoría"),
-  description: z.string().trim().min(1, "La descripción es obligatoria"),
-  date: z
-    .string()
-    .min(1, "Selecciona una fecha")
-    .refine((value) => value <= todayIsoDate(), {
-      message: "La fecha no puede ser posterior a hoy",
-    }),
-});
+const transactionFormSchema = z
+  .object({
+    type: z.enum(["income", "expense", "transfer"]),
+    amount: z.coerce.number().positive("El monto debe ser mayor que 0"),
+    currency: z.string().min(1, "Selecciona una moneda"),
+    paymentMethodId: z.coerce.number().int().positive("Selecciona un método de pago"),
+    destinationPaymentMethodId: z.coerce.number().int().positive().nullable(),
+    destinationAmount: z.coerce.number().positive().nullable(),
+    categoryId: z.coerce.number().int().positive().nullable(),
+    description: z.string().trim().min(1, "La descripción es obligatoria"),
+    date: z
+      .string()
+      .min(1, "Selecciona una fecha")
+      .refine((value) => value <= todayIsoDate(), {
+        message: "La fecha no puede ser posterior a hoy",
+      }),
+  })
+  // Which fields are required depends on the type: a transfer needs a
+  // destination account and cannot have a category, while income and expenses
+  // need a category and have no destination.
+  .superRefine((values, ctx) => {
+    if (values.type === "transfer") {
+      if (values.destinationPaymentMethodId === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["destinationPaymentMethodId"],
+          message: "Selecciona la cuenta de destino",
+        });
+      } else if (values.destinationPaymentMethodId === values.paymentMethodId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["destinationPaymentMethodId"],
+          message: "La cuenta de destino debe ser distinta de la de origen",
+        });
+      }
+      if (values.destinationAmount === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["destinationAmount"],
+          message: "Indica cuánto llega a la cuenta de destino",
+        });
+      }
+      return;
+    }
+
+    if (values.categoryId === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["categoryId"],
+        message: "Selecciona una categoría",
+      });
+    }
+  });
 
 type TransactionFormInput = z.input<typeof transactionFormSchema>;
 type TransactionFormValues = z.output<typeof transactionFormSchema>;
@@ -48,6 +88,20 @@ interface TransactionFormProps {
   // When set, the form edits this transaction instead of creating a new one.
   editing?: TransactionWithCategory | null;
   onSubmitTransaction: (transaction: NewTransaction) => Promise<void>;
+}
+
+function blankForm(currency: string): TransactionFormInput {
+  return {
+    type: "expense",
+    amount: 0,
+    currency,
+    paymentMethodId: undefined,
+    destinationPaymentMethodId: null,
+    destinationAmount: null,
+    categoryId: null,
+    description: "",
+    date: todayIsoDate(),
+  };
 }
 
 export function TransactionForm({
@@ -69,15 +123,7 @@ export function TransactionForm({
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
-    defaultValues: {
-      type: "expense",
-      amount: 0,
-      currency: defaultCurrency,
-      paymentMethodId: undefined,
-      categoryId: undefined,
-      description: "",
-      date: todayIsoDate(),
-    },
+    defaultValues: blankForm(defaultCurrency),
   });
 
   // Load the transaction being edited, or fall back to a blank form when
@@ -90,19 +136,13 @@ export function TransactionForm({
             amount: editing.amount,
             currency: editing.currency,
             paymentMethodId: editing.payment_method_id ?? undefined,
-            categoryId: editing.category_id ?? undefined,
+            destinationPaymentMethodId: editing.destination_payment_method_id,
+            destinationAmount: editing.destination_amount,
+            categoryId: editing.category_id,
             description: editing.description,
             date: editing.date,
           }
-        : {
-            type: "expense",
-            amount: 0,
-            currency: defaultCurrency,
-            paymentMethodId: undefined,
-            categoryId: undefined,
-            description: "",
-            date: todayIsoDate(),
-          },
+        : blankForm(defaultCurrency),
     );
     // `defaultCurrency` is intentionally excluded: changing the view's filter
     // should not wipe a form the user is already filling in. The separate
@@ -122,37 +162,104 @@ export function TransactionForm({
   const selectedCategoryId = watch("categoryId");
   const selectedCurrency = watch("currency");
   const selectedPaymentMethodId = watch("paymentMethodId");
+  const selectedDestinationId = watch("destinationPaymentMethodId");
+  const selectedAmount = watch("amount");
+
+  const isTransfer = selectedType === "transfer";
 
   const filteredCategories = useMemo(
     () => categories.filter((category) => category.type === selectedType),
     [categories, selectedType],
   );
 
-  // Only accounts held in the transaction's own currency can pay for it.
-  const filteredPaymentMethods = useMemo(
+  // Only accounts held in the transaction's own currency can pay for it. For a
+  // transfer this is the origin side.
+  const originAccounts = useMemo(
     () => paymentMethods.filter((method) => method.currency === selectedCurrency),
     [paymentMethods, selectedCurrency],
   );
 
-  const paymentMethodSelectItems = useMemo(
-    () =>
-      Object.fromEntries(
-        filteredPaymentMethods.map((method) => [String(method.id), method.name]),
-      ),
-    [filteredPaymentMethods],
+  // The destination is deliberately not filtered by currency: moving pesos into
+  // a dollar account is the whole point of supporting cross-currency transfers.
+  const destinationAccounts = useMemo(
+    () => paymentMethods.filter((method) => method.id !== selectedPaymentMethodId),
+    [paymentMethods, selectedPaymentMethodId],
   );
 
-  // Keep the selected account valid whenever the currency changes or accounts load.
+  const destinationAccount = useMemo(
+    () => paymentMethods.find((method) => method.id === selectedDestinationId) ?? null,
+    [paymentMethods, selectedDestinationId],
+  );
+
+  // When both sides hold the same currency the arriving figure is simply the
+  // amount sent, so the field is hidden and kept in sync behind the scenes.
+  const isSameCurrencyTransfer =
+    isTransfer &&
+    destinationAccount !== null &&
+    destinationAccount.currency === selectedCurrency;
+
+  const isCrossCurrency =
+    isTransfer &&
+    destinationAccount !== null &&
+    destinationAccount.currency !== selectedCurrency;
+
+  const originSelectItems = useMemo(
+    () =>
+      Object.fromEntries(
+        originAccounts.map((method) => [String(method.id), method.name]),
+      ),
+    [originAccounts],
+  );
+
+  const destinationSelectItems = useMemo(
+    () =>
+      Object.fromEntries(
+        destinationAccounts.map((method) => [
+          String(method.id),
+          `${method.name} (${method.currency})`,
+        ]),
+      ),
+    [destinationAccounts],
+  );
+
+  // Keep the selected origin valid whenever the currency changes or accounts load.
   useEffect(() => {
-    const stillValid = filteredPaymentMethods.some(
+    const stillValid = originAccounts.some(
       (method) => method.id === selectedPaymentMethodId,
     );
     if (!stillValid) {
-      setValue("paymentMethodId", filteredPaymentMethods[0]?.id as number, {
+      setValue("paymentMethodId", originAccounts[0]?.id as number, {
         shouldValidate: false,
       });
     }
-  }, [filteredPaymentMethods, selectedPaymentMethodId, setValue]);
+  }, [originAccounts, selectedPaymentMethodId, setValue]);
+
+  // Drop a destination that stopped being selectable (it became the origin, or
+  // the type went back to income/expense).
+  useEffect(() => {
+    if (!isTransfer) {
+      setValue("destinationPaymentMethodId", null, { shouldValidate: false });
+      setValue("destinationAmount", null, { shouldValidate: false });
+      return;
+    }
+    if (
+      selectedDestinationId !== null &&
+      !destinationAccounts.some((method) => method.id === selectedDestinationId)
+    ) {
+      setValue("destinationPaymentMethodId", null, { shouldValidate: false });
+    }
+  }, [isTransfer, destinationAccounts, selectedDestinationId, setValue]);
+
+  // Mirror the sent amount into the received one for same-currency transfers,
+  // so the user never has to type the same figure twice. Deliberately keyed on
+  // "both sides are known to match" rather than "not cross-currency": while the
+  // destination is still unresolved the field must be left alone, or loading a
+  // saved cross-currency transfer would overwrite its received amount with the
+  // sent one.
+  useEffect(() => {
+    if (!isSameCurrencyTransfer) return;
+    setValue("destinationAmount", selectedAmount, { shouldValidate: false });
+  }, [isSameCurrencyTransfer, selectedAmount, setValue]);
 
   const categorySelectItems = useMemo(
     () =>
@@ -164,23 +271,31 @@ export function TransactionForm({
 
   // Keep the selected category valid whenever the type changes or categories load.
   useEffect(() => {
+    if (isTransfer) {
+      setValue("categoryId", null, { shouldValidate: false });
+      return;
+    }
     const stillValid = filteredCategories.some(
       (category) => category.id === selectedCategoryId,
     );
     if (!stillValid) {
-      setValue("categoryId", filteredCategories[0]?.id as number, {
+      setValue("categoryId", filteredCategories[0]?.id ?? null, {
         shouldValidate: false,
       });
     }
-  }, [filteredCategories, selectedCategoryId, setValue]);
+  }, [isTransfer, filteredCategories, selectedCategoryId, setValue]);
 
   async function onSubmit(values: TransactionFormValues) {
+    const transfer = values.type === "transfer";
+
     await onSubmitTransaction({
       amount: values.amount,
       type: values.type,
       currency: values.currency,
-      categoryId: values.categoryId,
+      categoryId: transfer ? null : values.categoryId,
       paymentMethodId: values.paymentMethodId,
+      destinationPaymentMethodId: transfer ? values.destinationPaymentMethodId : null,
+      destinationAmount: transfer ? values.destinationAmount : null,
       description: values.description,
       date: values.date,
     });
@@ -194,6 +309,8 @@ export function TransactionForm({
       amount: 0,
       currency: values.currency,
       paymentMethodId: values.paymentMethodId,
+      destinationPaymentMethodId: values.destinationPaymentMethodId,
+      destinationAmount: null,
       categoryId: values.categoryId,
       description: "",
       date: todayIsoDate(),
@@ -229,6 +346,9 @@ export function TransactionForm({
                   <SelectItem value="income">
                     {TRANSACTION_TYPE_LABELS.income}
                   </SelectItem>
+                  <SelectItem value="transfer">
+                    {TRANSACTION_TYPE_LABELS.transfer}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -236,7 +356,9 @@ export function TransactionForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="transaction-amount">Monto</Label>
+          <Label htmlFor="transaction-amount">
+            {isTransfer ? "Monto enviado" : "Monto"}
+          </Label>
           <Input
             id="transaction-amount"
             type="number"
@@ -279,52 +401,56 @@ export function TransactionForm({
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="transaction-category">Categoría</Label>
-          <Controller
-            control={control}
-            name="categoryId"
-            render={({ field }) => (
-              <Select
-                items={categorySelectItems}
-                value={field.value ? String(field.value) : ""}
-                onValueChange={(value) => field.onChange(Number(value))}
-              >
-                <SelectTrigger id="transaction-category" className="w-full">
-                  <SelectValue placeholder="Selecciona una categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredCategories.map((category) => (
-                    <SelectItem key={category.id} value={String(category.id)}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {!isTransfer && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="transaction-category">Categoría</Label>
+            <Controller
+              control={control}
+              name="categoryId"
+              render={({ field }) => (
+                <Select
+                  items={categorySelectItems}
+                  value={field.value ? String(field.value) : ""}
+                  onValueChange={(value) => field.onChange(Number(value))}
+                >
+                  <SelectTrigger id="transaction-category" className="w-full">
+                    <SelectValue placeholder="Selecciona una categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredCategories.map((category) => (
+                      <SelectItem key={category.id} value={String(category.id)}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.categoryId && (
+              <p className="text-xs text-destructive">{errors.categoryId.message}</p>
             )}
-          />
-          {errors.categoryId && (
-            <p className="text-xs text-destructive">{errors.categoryId.message}</p>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="flex flex-col gap-1.5 @sm:col-span-2">
-          <Label htmlFor="transaction-payment-method">Método de pago</Label>
+        <div className={cn("flex flex-col gap-1.5", !isTransfer && "@sm:col-span-2")}>
+          <Label htmlFor="transaction-payment-method">
+            {isTransfer ? "Cuenta de origen" : "Método de pago"}
+          </Label>
           <Controller
             control={control}
             name="paymentMethodId"
             render={({ field }) => (
               <Select
-                items={paymentMethodSelectItems}
+                items={originSelectItems}
                 value={field.value ? String(field.value) : ""}
                 onValueChange={(value) => field.onChange(Number(value))}
-                disabled={filteredPaymentMethods.length === 0}
+                disabled={originAccounts.length === 0}
               >
                 <SelectTrigger id="transaction-payment-method" className="w-full">
                   <SelectValue placeholder="Selecciona un método de pago" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredPaymentMethods.map((method) => (
+                  {originAccounts.map((method) => (
                     <SelectItem key={method.id} value={String(method.id)}>
                       {method.name}
                     </SelectItem>
@@ -333,9 +459,9 @@ export function TransactionForm({
               </Select>
             )}
           />
-          {filteredPaymentMethods.length === 0 ? (
+          {originAccounts.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No hay cuentas en {selectedCurrency}. Crea una en Ajustes.
+              No hay cuentas en {selectedCurrency}. Crea una en la sección Cuentas.
             </p>
           ) : (
             errors.paymentMethodId && (
@@ -345,6 +471,65 @@ export function TransactionForm({
             )
           )}
         </div>
+
+        {isTransfer && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="transaction-destination">Cuenta de destino</Label>
+            <Controller
+              control={control}
+              name="destinationPaymentMethodId"
+              render={({ field }) => (
+                <Select
+                  items={destinationSelectItems}
+                  value={field.value ? String(field.value) : ""}
+                  onValueChange={(value) => field.onChange(Number(value))}
+                  disabled={destinationAccounts.length === 0}
+                >
+                  <SelectTrigger id="transaction-destination" className="w-full">
+                    <SelectValue placeholder="Selecciona la cuenta de destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinationAccounts.map((method) => (
+                      <SelectItem key={method.id} value={String(method.id)}>
+                        {method.name} ({method.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.destinationPaymentMethodId && (
+              <p className="text-xs text-destructive">
+                {errors.destinationPaymentMethodId.message}
+              </p>
+            )}
+          </div>
+        )}
+
+        {isCrossCurrency && destinationAccount && (
+          <div className="flex flex-col gap-1.5 @sm:col-span-2">
+            <Label htmlFor="transaction-destination-amount">
+              Monto recibido en {destinationAccount.currency}
+            </Label>
+            <Input
+              id="transaction-destination-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              {...register("destinationAmount")}
+            />
+            <p className="text-xs text-muted-foreground">
+              Lo que realmente entra en «{destinationAccount.name}». Al registrar
+              ambos importes no hace falta ninguna cotización.
+            </p>
+            {errors.destinationAmount && (
+              <p className="text-xs text-destructive">
+                {errors.destinationAmount.message}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5 @sm:col-span-2">
           <Label htmlFor="transaction-date">Fecha</Label>
@@ -370,7 +555,9 @@ export function TransactionForm({
           <Label htmlFor="transaction-description">Descripción</Label>
           <Input
             id="transaction-description"
-            placeholder="Ej. Compra en el supermercado"
+            placeholder={
+              isTransfer ? "Ej. Compra de dólares" : "Ej. Compra en el supermercado"
+            }
             {...register("description")}
           />
           {errors.description && (
@@ -380,15 +567,17 @@ export function TransactionForm({
           )}
         </div>
 
-      <div className="@sm:col-span-2">
-        <Button type="submit" disabled={isSubmitting} className="w-full @sm:w-auto">
-          {isSubmitting
-            ? "Guardando..."
-            : isEditing
-              ? "Guardar cambios"
-              : "Agregar transacción"}
-        </Button>
-      </div>
+        <div className="@sm:col-span-2">
+          <Button type="submit" disabled={isSubmitting} className="w-full @sm:w-auto">
+            {isSubmitting
+              ? "Guardando..."
+              : isEditing
+                ? "Guardar cambios"
+                : isTransfer
+                  ? "Registrar transferencia"
+                  : "Agregar transacción"}
+          </Button>
+        </div>
       </form>
     </div>
   );

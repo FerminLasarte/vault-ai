@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { convertAmount } from "@/lib/finance";
 import type { FinancialSummary } from "@/lib/finance";
 
 interface SummaryCardsProps {
@@ -15,6 +16,9 @@ interface SummaryCardsProps {
   summary: FinancialSummary;
   currency: string;
   isLoading: boolean;
+  // How many ARS one USD is worth, or null while no quote is known. Drives the
+  // secondary equivalent under each figure.
+  rate: number | null;
 }
 
 const CARD_DEFINITIONS = [
@@ -23,7 +27,13 @@ const CARD_DEFINITIONS = [
   { key: "expenses", label: "Gastos", icon: TrendingDown, tone: "negative" },
 ] as const;
 
-export function SummaryCards({ summary, currency, isLoading }: SummaryCardsProps) {
+export function SummaryCards({
+  summary,
+  currency,
+  isLoading,
+  rate,
+}: SummaryCardsProps) {
+  const otherCurrency = currency === "ARS" ? "USD" : "ARS";
   const values: Record<(typeof CARD_DEFINITIONS)[number]["key"], number> = {
     balance: summary.balance,
     income: summary.income,
@@ -46,8 +56,17 @@ export function SummaryCards({ summary, currency, isLoading }: SummaryCardsProps
               {isLoading ? "—" : formatCurrency(values[key], currency)}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex items-center justify-between gap-2">
             <Icon className="size-5 text-muted-foreground" />
+            {!isLoading && rate !== null && (
+              <span className="text-xs text-muted-foreground">
+                ≈{" "}
+                {formatCurrency(
+                  convertAmount(values[key], currency, otherCurrency, rate) ?? 0,
+                  otherCurrency,
+                )}
+              </span>
+            )}
           </CardContent>
         </Card>
       ))}
