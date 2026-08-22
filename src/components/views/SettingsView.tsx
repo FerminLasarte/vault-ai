@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, HardDriveDownload, Upload } from "lucide-react";
+import { CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
-import { todayIsoDate } from "@/lib/format";
+import { formatDate, todayIsoDate } from "@/lib/format";
 import type { ThemePreference } from "@/context/ThemeContext";
 import type { ImportSkip } from "@/lib/csv";
 
@@ -35,8 +35,17 @@ interface ImportOutcome {
 }
 
 export function SettingsView() {
-  const { transactions, categories, paymentMethods, importTransactions, isMutating } =
-    useAppData();
+  const {
+    transactions,
+    categories,
+    categoryRules,
+    paymentMethods,
+    importTransactions,
+    isMutating,
+    exchangeRateHistory,
+    isRefreshingRate,
+    backfillExchangeRates,
+  } = useAppData();
   const { preference, setPreference } = useTheme();
 
   const [databasePath, setDatabasePath] = useState<string | null>(null);
@@ -93,6 +102,7 @@ export function SettingsView() {
 
       const plan = buildImportPlan(parseCsv(contents), {
         categories,
+        categoryRules,
         accounts: paymentMethods,
         existing: transactions,
         supportedCurrencies: CURRENCY_CODES,
@@ -215,6 +225,39 @@ export function SettingsView() {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cotizaciones</CardTitle>
+          <CardDescription>
+            Con el histórico, cada movimiento se valúa a la cotización del día en
+            que ocurrió, en vez de a la de hoy. Sin él, un gasto viejo parece más
+            barato de lo que fue.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            {exchangeRateHistory.length === 0
+              ? "Todavía no descargaste el histórico."
+              : exchangeRateHistory.length === 1
+                ? "1 cotización guardada. Traé el histórico para valuar el pasado."
+                : `${exchangeRateHistory.length} cotizaciones guardadas, desde ${formatDate(
+                    exchangeRateHistory[0].date,
+                  )}.`}
+          </p>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isRefreshingRate}
+              onClick={() => void backfillExchangeRates()}
+            >
+              <CalendarClock />
+              {isRefreshingRate ? "Descargando..." : "Traer histórico de cotizaciones"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

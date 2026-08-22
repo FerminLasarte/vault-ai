@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,8 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/DatePicker";
+import { TagInput } from "@/components/TagInput";
 import type {
   Category,
+  CategoryRuleWithCategory,
+  Tag,
   NewTransaction,
   PaymentMethod,
   TransactionWithCategory,
@@ -22,6 +25,8 @@ import type {
 import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
 import { CURRENCY_LABELS } from "@/lib/currency";
 import { todayIsoDate } from "@/lib/format";
+import { matchCategoryId } from "@/lib/categoryRules";
+import { splitTagNames } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
 const transactionFormSchema = z
@@ -83,11 +88,16 @@ type TransactionFormValues = z.output<typeof transactionFormSchema>;
 
 interface TransactionFormProps {
   categories: Category[];
+  categoryRules: CategoryRuleWithCategory[];
+  tags: Tag[];
   paymentMethods: PaymentMethod[];
   defaultCurrency: string;
   // When set, the form edits this transaction instead of creating a new one.
   editing?: TransactionWithCategory | null;
-  onSubmitTransaction: (transaction: NewTransaction) => Promise<void>;
+  onSubmitTransaction: (
+    transaction: NewTransaction,
+    tags: string[],
+  ) => Promise<void>;
 }
 
 function blankForm(currency: string): TransactionFormInput {
@@ -106,6 +116,8 @@ function blankForm(currency: string): TransactionFormInput {
 
 export function TransactionForm({
   categories,
+  categoryRules,
+  tags,
   paymentMethods,
   defaultCurrency,
   editing = null,
@@ -129,6 +141,8 @@ export function TransactionForm({
   // Load the transaction being edited, or fall back to a blank form when
   // switching back to create mode.
   useEffect(() => {
+    categoryTouchedRef.current = false;
+    setSelectedTags(splitTagNames(editing?.tag_names ?? null));
     reset(
       editing
         ? {
@@ -158,7 +172,17 @@ export function TransactionForm({
     setValue("currency", defaultCurrency);
   }, [defaultCurrency, isEditing, setValue]);
 
+  // Once the user picks a category by hand, the rules stop second-guessing them
+  // until they edit the description again — an autocomplete that keeps
+  // overriding a deliberate choice is worse than no autocomplete.
+  const categoryTouchedRef = useRef(false);
+
+  // Kept outside react-hook-form because tags are their own table rather than a
+  // field on the transaction, and they are saved through a separate call.
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
   const selectedType = watch("type");
+  const typedDescription = watch("description");
   const selectedCategoryId = watch("categoryId");
   const selectedCurrency = watch("currency");
   const selectedPaymentMethodId = watch("paymentMethodId");
@@ -261,6 +285,20 @@ export function TransactionForm({
     setValue("destinationAmount", selectedAmount, { shouldValidate: false });
   }, [isSameCurrencyTransfer, selectedAmount, setValue]);
 
+  // Fill in the category from the rules as the description is typed.
+  useEffect(() => {
+    if (isTransfer || categoryTouchedRef.current) return;
+
+    const matched = matchCategoryId(typedDescription ?? "", categoryRules);
+    if (matched === null) return;
+
+    // A rule can point at a category of the other kind (an expense rule while
+    // the form is on income); leaving it alone beats silently switching type.
+    if (!filteredCategories.some((category) => category.id === matched)) return;
+
+    setValue("categoryId", matched, { shouldValidate: false });
+  }, [typedDescription, categoryRules, isTransfer, filteredCategories, setValue]);
+
   const categorySelectItems = useMemo(
     () =>
       Object.fromEntries(
@@ -288,27 +326,31 @@ export function TransactionForm({
   async function onSubmit(values: TransactionFormValues) {
     const transfer = values.type === "transfer";
 
-    await onSubmitTransaction({
-      amount: values.amount,
-      type: values.type,
-      currency: values.currency,
-      categoryId: transfer ? null : values.categoryId,
-      paymentMethodId: values.paymentMethodId,
-      destinationPaymentMethodId: transfer ? values.destinationPaymentMethodId : null,
-      destinationAmount: transfer ? values.destinationAmount : null,
-      description: values.description,
-      date: values.date,
-    });
+    await onSubmitTransaction(
+      {
+        amount: values.amount,
+        type: values.type,
+        currency: values.currency,
+        categoryId: transfer ? null : values.categoryId,
+        paymentMethodId: values.paymentMethodId,
+        destinationPaymentMethodId: transfer ? values.destinationPaymentMethodId : null,
+        destinationAmount: transfer ? values.destinationAmount : null,
+        description: values.description,
+        date: values.date,
+      },
+      selectedTags,
+    );
 
     // Keep the form ready for another entry when creating; when editing, the
     // caller closes the dialog, so blanking the fields would only flicker.
     if (isEditing) return;
 
+    setSelectedTags([]);
     reset({
-      type: values.type,
+        type: values.type,
       amount: 0,
-      currency: values.currency,
-      paymentMethodId: values.paymentMethodId,
+        currency: values.currency,
+        paymentMethodId: values.paymentMethodId,
       destinationPaymentMethodId: values.destinationPaymentMethodId,
       destinationAmount: null,
       categoryId: values.categoryId,
@@ -411,7 +453,10 @@ export function TransactionForm({
                 <Select
                   items={categorySelectItems}
                   value={field.value ? String(field.value) : ""}
-                  onValueChange={(value) => field.onChange(Number(value))}
+                  onValueChange={(value) => {
+                    categoryTouchedRef.current = true;
+                    field.onChange(Number(value));
+                  }}
                 >
                   <SelectTrigger id="transaction-category" className="w-full">
                     <SelectValue placeholder="Selecciona una categoría" />
@@ -565,6 +610,16 @@ export function TransactionForm({
               {errors.description.message}
             </p>
           )}
+        </div>
+
+        <div className="flex flex-col gap-1.5 @sm:col-span-2">
+          <Label htmlFor="transaction-tags">Etiquetas</Label>
+          <TagInput
+            id="transaction-tags"
+            value={selectedTags}
+            onChange={setSelectedTags}
+            suggestions={tags}
+          />
         </div>
 
         <div className="@sm:col-span-2">

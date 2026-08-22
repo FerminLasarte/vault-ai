@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryDialog } from "@/components/CategoryDialog";
+import { CategoryRulesCard } from "@/components/CategoryRulesCard";
 import { useAppData } from "@/hooks/useAppData";
 import { CATEGORY_TYPE_LABELS } from "@/lib/labels";
 import type { Category, CategoryType, NewCategory } from "@/db";
@@ -154,6 +155,8 @@ export function CategoriesView() {
           ))}
         </div>
       )}
+
+      <CategoryRulesCard />
 
       <CategoryDialog
         open={isFormOpen}

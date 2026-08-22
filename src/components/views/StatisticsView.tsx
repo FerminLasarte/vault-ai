@@ -10,8 +10,13 @@ import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
+import { AlertTriangle, Repeat } from "lucide-react";
 import {
   applyTransactionFilters,
+  buildRateLookup,
+  calculateBudgetProgress,
+  exceededBudgets,
+  summaryInCurrency,
   buildMonthlyTrend,
   calculateSummary,
   currentMonthKey,
@@ -20,15 +25,43 @@ import {
   groupExpensesByCategory,
 } from "@/lib/finance";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
+import { collectPendingRecurrences } from "@/lib/pendingRecurring";
+import { collectPendingInstallments } from "@/lib/pendingInstallments";
+import { todayIsoDate } from "@/lib/format";
 
 const TREND_MONTHS = 6;
 
 export function StatisticsView() {
-  const { transactions, categories, exchangeRate, isLoading } = useAppData();
+  const {
+    transactions,
+    categories,
+    budgets,
+    recurring,
+    installmentPlans,
+    exchangeRate,
+    exchangeRateHistory,
+    isLoading,
+  } = useAppData();
 
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState(EMPTY_DATE_RANGE);
+
+  // Deliberately computed from the unfiltered list: a budget is about the real
+  // period total, not about whatever slice the user is currently looking at.
+  const overspent = useMemo(
+    () => exceededBudgets(calculateBudgetProgress(budgets, transactions)),
+    [budgets, transactions],
+  );
+
+  // Both kinds of pending commitment are surfaced together: two separate
+  // notices would make it easy to act on one and never notice the other.
+  const pendingCount = useMemo(
+    () =>
+      collectPendingRecurrences(recurring, todayIsoDate()).length +
+      collectPendingInstallments(installmentPlans, todayIsoDate()).length,
+    [recurring, installmentPlans],
+  );
 
   // Every chart and KPI below reads from this single filtered list, so the
   // three filters combine naturally and recalculate on any change.
@@ -44,6 +77,24 @@ export function StatisticsView() {
   );
 
   const summary = useMemo(() => calculateSummary(filtered), [filtered]);
+
+  // Built from the cached series so each movement is valued at the rate that
+  // was in force on its own date. Falls back to today's quote when no history
+  // has been downloaded yet, which is the previous behaviour.
+  const rateAt = useMemo(
+    () =>
+      exchangeRateHistory.length > 0
+        ? buildRateLookup(exchangeRateHistory)
+        : buildRateLookup(exchangeRate ? [exchangeRate] : []),
+    [exchangeRateHistory, exchangeRate],
+  );
+
+  const otherCurrency = currency === "ARS" ? "USD" : "ARS";
+
+  const convertedSummary = useMemo(
+    () => summaryInCurrency(filtered, otherCurrency, rateAt),
+    [filtered, otherCurrency, rateAt],
+  );
   const categoryBreakdown = useMemo(() => groupExpensesByCategory(filtered), [filtered]);
 
   // The trend spans the selected range when there is one, and the last six
@@ -68,6 +119,43 @@ export function StatisticsView() {
         title="Estadísticas"
         description="Analiza tus finanzas con filtros combinables."
       />
+
+      {overspent.length > 0 && (
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <AlertTriangle className="size-4 shrink-0 text-destructive" />
+            <span className="text-sm font-medium">
+              {overspent.length === 1
+                ? "Superaste un presupuesto"
+                : `Superaste ${overspent.length} presupuestos`}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {overspent
+                .map(
+                  (entry) =>
+                    `${entry.budget.category_name} (${Math.round(entry.ratio * 100)}%)`,
+                )
+                .join(" · ")}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingCount > 0 && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Repeat className="size-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {pendingCount === 1
+                ? "Tenés 1 movimiento pendiente de confirmar"
+                : `Tenés ${pendingCount} movimientos pendientes de confirmar`}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              Revisalos en Recurrentes y en Deudas.
+            </span>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4">
@@ -101,9 +189,11 @@ export function StatisticsView() {
       <div className="flex flex-col gap-3">
         <SummaryCards
           summary={summary}
+          convertedSummary={convertedSummary}
+          convertedCurrency={otherCurrency}
           currency={currency}
           isLoading={isLoading}
-          rate={exchangeRate?.sell ?? null}
+          usesHistoricalRates={exchangeRateHistory.length > 0}
         />
         <ExchangeRateBar />
       </div>

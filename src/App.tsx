@@ -4,6 +4,10 @@ import { StatisticsView } from "@/components/views/StatisticsView";
 import { TransactionsView } from "@/components/views/TransactionsView";
 import { CategoriesView } from "@/components/views/CategoriesView";
 import { AccountsView } from "@/components/views/AccountsView";
+import { RecurringView } from "@/components/views/RecurringView";
+import { BudgetsView } from "@/components/views/BudgetsView";
+import { DebtsView } from "@/components/views/DebtsView";
+import { SavingsView } from "@/components/views/SavingsView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { Toaster } from "@/components/ui/sonner";
 import { AppDataProvider } from "@/context/AppDataContext";
@@ -14,6 +18,10 @@ const VIEWS: Record<View, () => React.JSX.Element> = {
   transactions: TransactionsView,
   categories: CategoriesView,
   accounts: AccountsView,
+  recurring: RecurringView,
+  budgets: BudgetsView,
+  debts: DebtsView,
+  savings: SavingsView,
   settings: SettingsView,
 };
 

@@ -1,9 +1,11 @@
 import type {
+  BudgetWithCategory,
   PaymentMethod,
   Transaction,
   TransactionType,
   TransactionWithCategory,
 } from "@/db/schema";
+import { normalizeForSearch, splitTagNames } from "@/lib/text";
 
 export interface FinancialSummary {
   balance: number;
@@ -79,15 +81,6 @@ export function filterByAmountRange<T extends Transaction>(
   );
 }
 
-// Strips diacritics and case so "nomina" matches "Nómina": Spanish
-// descriptions get typed without accents far more often than with them.
-function normalizeForSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 // Matches against the description. An empty or whitespace-only query means
 // "no constraint" rather than "match nothing".
 export function filterBySearch<T extends Transaction>(
@@ -99,6 +92,23 @@ export function filterBySearch<T extends Transaction>(
 
   return transactions.filter((transaction) =>
     normalizeForSearch(transaction.description).includes(needle),
+  );
+}
+
+// Kept out of `applyTransactionFilters` because tags live on the joined
+// listing type rather than on a bare transaction row, and widening that
+// function's constraint would force every caller to carry the join.
+export function filterByTag<T extends { tag_names: string | null }>(
+  transactions: T[],
+  tagName: string,
+): T[] {
+  const wanted = normalizeForSearch(tagName);
+  if (wanted === "") return transactions;
+
+  return transactions.filter((transaction) =>
+    splitTagNames(transaction.tag_names).some(
+      (name) => normalizeForSearch(name) === wanted,
+    ),
   );
 }
 
@@ -319,4 +329,147 @@ export function consolidateByCurrency(
   }
 
   return consolidated;
+}
+
+export interface BudgetProgress {
+  budget: BudgetWithCategory;
+  spent: number;
+  remaining: number;
+  // Share of the cap already used. Can exceed 1; the UI clamps the bar, but the
+  // number itself must stay truthful so "180%" is reportable.
+  ratio: number;
+  isExceeded: boolean;
+}
+
+// The key a budget's period compares against: "YYYY-MM" for a monthly cap,
+// "YYYY" for an annual one. Transaction dates are "YYYY-MM-DD" strings, so a
+// prefix match answers "does this fall inside the current period?".
+export function budgetPeriodKey(
+  period: BudgetWithCategory["period"],
+  reference: Date = new Date(),
+): string {
+  const year = String(reference.getFullYear());
+  return period === "annual" ? year : currentMonthKey(reference);
+}
+
+// How much of each budget has been used in the period that contains
+// `reference`. Only expenses count: an income filed under the same category
+// would otherwise refund the budget, which is not what a spending cap means.
+export function calculateBudgetProgress(
+  budgets: BudgetWithCategory[],
+  transactions: Transaction[],
+  reference: Date = new Date(),
+): BudgetProgress[] {
+  return budgets.map((budget) => {
+    const key = budgetPeriodKey(budget.period, reference);
+
+    const spent = transactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          transaction.category_id === budget.category_id &&
+          transaction.currency === budget.currency &&
+          transaction.date.startsWith(key),
+      )
+      .reduce((total, transaction) => total + transaction.amount, 0);
+
+    // A zero or negative cap has no meaningful ratio; treat it as fully used
+    // rather than dividing by zero and producing Infinity in the UI.
+    const ratio = budget.amount > 0 ? spent / budget.amount : 1;
+
+    return {
+      budget,
+      spent,
+      remaining: budget.amount - spent,
+      ratio,
+      isExceeded: spent > budget.amount,
+    };
+  });
+}
+
+export function exceededBudgets(progress: BudgetProgress[]): BudgetProgress[] {
+  return progress.filter((entry) => entry.isExceeded);
+}
+
+// A lookup from date to the rate in force that day, built once and reused.
+export type RateLookup = (date: string) => number | null;
+
+// Builds the lookup from the cached series.
+//
+// Markets do not quote on weekends or holidays, so a movement dated on one of
+// those days has no rate of its own. The most recent earlier quote is used —
+// the price that was actually in force. Movements older than the whole series
+// fall back to its first quote, which is the closest thing to the truth
+// available and beats refusing to value them at all.
+export function buildRateLookup(
+  rates: { date: string; sell: number }[],
+): RateLookup {
+  if (rates.length === 0) return () => null;
+
+  // Ascending, so a scan backwards finds the latest quote at or before a date.
+  const sorted = [...rates].sort((a, b) => a.date.localeCompare(b.date));
+  const cache = new Map<string, number>();
+
+  return (date: string) => {
+    const cached = cache.get(date);
+    if (cached !== undefined) return cached;
+
+    let candidate = sorted[0].sell;
+    for (const rate of sorted) {
+      if (rate.date > date) break;
+      candidate = rate.sell;
+    }
+
+    cache.set(date, candidate);
+    return candidate;
+  };
+}
+
+// Converts a movement using the rate of its own date rather than today's.
+//
+// This is the difference between "what did this cost me at the time" and "what
+// would it cost me now": restating a 2023 purchase at today's dollar makes the
+// past look far cheaper than it was.
+export function convertAtDate(
+  amount: number,
+  from: string,
+  to: string,
+  date: string,
+  rateAt: RateLookup,
+): number | null {
+  if (from === to) return amount;
+
+  const rate = rateAt(date);
+  if (rate === null) return null;
+
+  return convertAmount(amount, from, to, rate);
+}
+
+// Income, expenses and balance expressed in one currency, with every movement
+// valued at its own date. Returns null when no rate history exists at all.
+export function summaryInCurrency<T extends Transaction>(
+  transactions: T[],
+  targetCurrency: string,
+  rateAt: RateLookup,
+): FinancialSummary | null {
+  let income = 0;
+  let expenses = 0;
+
+  for (const transaction of transactions) {
+    if (transaction.type === "transfer") continue;
+
+    const converted = convertAtDate(
+      transaction.amount,
+      transaction.currency,
+      targetCurrency,
+      transaction.date,
+      rateAt,
+    );
+    if (converted === null) return null;
+
+    if (transaction.type === "income") income += converted;
+    else expenses += converted;
+  }
+
+  return { balance: income - expenses, income, expenses };
 }

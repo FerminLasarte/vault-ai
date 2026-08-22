@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use std::fs;
 use std::path::PathBuf;
 
@@ -16,6 +18,34 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|error| error.to_string())
+}
+
+// Largest receipt accepted. Attachments are stored inside the database, so an
+// unbounded file would bloat every backup from then on.
+const MAX_ATTACHMENT_BYTES: usize = 5 * 1024 * 1024;
+
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+
+    if bytes.len() > MAX_ATTACHMENT_BYTES {
+        return Err(format!(
+            "El archivo pesa {} MB y el máximo es {} MB",
+            bytes.len() / (1024 * 1024),
+            MAX_ATTACHMENT_BYTES / (1024 * 1024)
+        ));
+    }
+
+    Ok(BASE64.encode(bytes))
+}
+
+#[tauri::command]
+fn write_file_base64(path: String, contents: String) -> Result<(), String> {
+    let bytes = BASE64
+        .decode(contents)
+        .map_err(|error| format!("El adjunto está dañado: {error}"))?;
+
+    fs::write(&path, bytes).map_err(|error| error.to_string())
 }
 
 // Copies the live SQLite file. The WAL is checkpointed by the caller first, so
@@ -360,6 +390,203 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // Text rules that map a description to a category, so recurring
+        // descriptions ("Netflix", "Coto") stop needing to be classified by
+        // hand. ON DELETE CASCADE because foreign keys are enforced: without it,
+        // deleting a category that a rule points at would fail outright.
+        Migration {
+            version: 15,
+            description: "create_category_rules_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS category_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern TEXT NOT NULL,
+                    category_id INTEGER NOT NULL
+                        REFERENCES categories(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_category_rules_category
+                    ON category_rules(category_id);
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Tags cut across categories: a transaction belongs to exactly one
+        // category but can carry any number of tags ("viaje bariloche"), which
+        // is what makes one-off groupings possible without polluting the
+        // category taxonomy.
+        //
+        // NOTE for future migrations: transaction_tags points AT transactions.
+        // Rebuilding the transactions table from here on must park these
+        // references first, the way migration 12 does for payment_methods —
+        // foreign keys are enforced, so a plain DROP TABLE will fail.
+        Migration {
+            version: 16,
+            description: "create_tags_tables",
+            sql: "
+                CREATE TABLE IF NOT EXISTS tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+                );
+
+                CREATE TABLE IF NOT EXISTS transaction_tags (
+                    transaction_id INTEGER NOT NULL
+                        REFERENCES transactions(id) ON DELETE CASCADE,
+                    tag_id INTEGER NOT NULL
+                        REFERENCES tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (transaction_id, tag_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag
+                    ON transaction_tags(tag_id);
+            ",
+            kind: MigrationKind::Up,
+        },
+        // A spending cap per category. Budgets are per currency because ARS and
+        // USD totals are never comparable, and per period because some limits
+        // are naturally monthly (groceries) and others annual (insurance).
+        // The UNIQUE constraint stops the same cap being defined twice, which
+        // would make "how much is left?" ambiguous.
+        Migration {
+            version: 17,
+            description: "create_budgets_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS budgets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_id INTEGER NOT NULL
+                        REFERENCES categories(id) ON DELETE CASCADE,
+                    currency TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    period TEXT NOT NULL CHECK (period IN ('monthly', 'annual')),
+                    UNIQUE (category_id, currency, period)
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Templates for movements that repeat: rent, salary, subscriptions.
+        // They are proposals, not transactions — nothing reaches the ledger until
+        // the user confirms it, so a rent increase or a month that did not happen
+        // never turns into a wrong record.
+        //
+        // `start_date` is the anchor the whole series is derived from, which is
+        // what keeps a template due on the 31st from collapsing onto the 28th
+        // after one February. `last_confirmed_date` is the most recent occurrence
+        // already accepted or dismissed; everything after it is still pending.
+        // ON DELETE SET NULL so removing a category or account leaves the
+        // template usable rather than failing the delete outright.
+        Migration {
+            version: 18,
+            description: "create_recurring_transactions_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS recurring_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    currency TEXT NOT NULL,
+                    frequency TEXT NOT NULL
+                        CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+                    start_date TEXT NOT NULL,
+                    last_confirmed_date TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Receipts live inside the database rather than in a folder beside it,
+        // so the existing backup covers them with no extra machinery.
+        //
+        // Stored base64 in a TEXT column, not as a BLOB: tauri-plugin-sql binds
+        // parameters as JSON and only understands null, string and number, so a
+        // byte array would be written as serialised JSON rather than binary.
+        // Base64 costs about a third more space and is otherwise equivalent.
+        Migration {
+            version: 19,
+            description: "create_attachments_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transaction_id INTEGER NOT NULL
+                        REFERENCES transactions(id) ON DELETE CASCADE,
+                    file_name TEXT NOT NULL,
+                    mime_type TEXT NOT NULL,
+                    byte_size INTEGER NOT NULL,
+                    content_base64 TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_attachments_transaction
+                    ON attachments(transaction_id);
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Purchases paid in instalments. Modelled as a plan rather than as N
+        // transactions written up front: each instalment is proposed on its due
+        // date and only becomes a real movement once confirmed, so a plan that
+        // gets cancelled or refinanced never leaves invented history behind.
+        //
+        // `confirmed_count` is how many instalments have been dealt with; what
+        // is still owed is derived from it, which keeps the two from drifting
+        // apart the way a stored balance would.
+        Migration {
+            version: 20,
+            description: "create_installment_plans_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS installment_plans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    total_amount REAL NOT NULL,
+                    installment_count INTEGER NOT NULL CHECK (installment_count > 0),
+                    currency TEXT NOT NULL,
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    first_due_date TEXT NOT NULL,
+                    confirmed_count INTEGER NOT NULL DEFAULT 0
+                        CHECK (confirmed_count >= 0),
+                    created_at TEXT NOT NULL
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Savings goals. How progress is measured is chosen per goal, because
+        // both ways are legitimate and neither covers the other: 'account'
+        // watches the real balance of an account and needs no bookkeeping at
+        // all, while 'contributions' lets several goals share one account, or
+        // track saving that no single account reflects.
+        Migration {
+            version: 21,
+            description: "create_savings_goals_tables",
+            sql: "
+                CREATE TABLE IF NOT EXISTS savings_goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    target_amount REAL NOT NULL CHECK (target_amount > 0),
+                    currency TEXT NOT NULL,
+                    tracking_mode TEXT NOT NULL
+                        CHECK (tracking_mode IN ('account', 'contributions')),
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    target_date TEXT,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS savings_contributions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    goal_id INTEGER NOT NULL
+                        REFERENCES savings_goals(id) ON DELETE CASCADE,
+                    amount REAL NOT NULL,
+                    date TEXT NOT NULL,
+                    note TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_savings_contributions_goal
+                    ON savings_contributions(goal_id);
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -376,6 +603,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,
+            read_file_base64,
+            write_file_base64,
             backup_database
         ])
         .run(tauri::generate_context!())

@@ -5,6 +5,10 @@ import {
   Wallet,
   ArrowLeftRight,
   Settings,
+  CreditCard,
+  PiggyBank,
+  Repeat,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,15 +18,63 @@ export type View =
   | "transactions"
   | "categories"
   | "accounts"
+  | "recurring"
+  | "budgets"
+  | "debts"
+  | "savings"
   | "settings";
 
-const NAV_ITEMS = [
+interface NavItem {
+  view: View;
+  label: string;
+  icon: LucideIcon;
+}
+
+// The places the user actually works in, in the order the work tends to happen.
+const MAIN_ITEMS = [
   { view: "statistics", label: "Estadísticas", icon: ChartPie },
   { view: "transactions", label: "Transacciones", icon: ArrowLeftRight },
+  { view: "recurring", label: "Recurrentes", icon: Repeat },
   { view: "categories", label: "Categorías", icon: Tags },
   { view: "accounts", label: "Cuentas", icon: Landmark },
+  { view: "budgets", label: "Presupuestos", icon: Target },
+  { view: "debts", label: "Deudas", icon: CreditCard },
+  { view: "savings", label: "Ahorros", icon: PiggyBank },
+] as const satisfies ReadonlyArray<NavItem>;
+
+// Configuration rather than a destination, so it sits apart at the bottom
+// instead of competing with the six views above it.
+const FOOTER_ITEMS = [
   { view: "settings", label: "Ajustes", icon: Settings },
-] as const satisfies ReadonlyArray<{ view: View; label: string; icon: LucideIcon }>;
+] as const satisfies ReadonlyArray<NavItem>;
+
+interface NavButtonProps {
+  item: NavItem;
+  isCurrent: boolean;
+  onNavigate: (view: View) => void;
+}
+
+function NavButton({ item, isCurrent, onNavigate }: NavButtonProps) {
+  const { view, label, icon: Icon } = item;
+
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-current={isCurrent ? "page" : undefined}
+      onClick={() => onNavigate(view)}
+      className={cn(
+        "flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors sm:justify-start sm:px-3",
+        isCurrent
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
 
 interface SidebarProps {
   currentView: View;
@@ -40,25 +92,26 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-2 sm:px-3">
-        {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
-          <button
-            key={view}
-            type="button"
-            title={label}
-            aria-current={currentView === view ? "page" : undefined}
-            onClick={() => onNavigate(view)}
-            className={cn(
-              "flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors sm:justify-start sm:px-3",
-              currentView === view
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            )}
-          >
-            <Icon className="size-4 shrink-0" />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
+        {MAIN_ITEMS.map((item) => (
+          <NavButton
+            key={item.view}
+            item={item}
+            isCurrent={currentView === item.view}
+            onNavigate={onNavigate}
+          />
         ))}
       </nav>
+
+      <div className="flex flex-col gap-1 px-2 pb-4 sm:px-3">
+        {FOOTER_ITEMS.map((item) => (
+          <NavButton
+            key={item.view}
+            item={item}
+            isCurrent={currentView === item.view}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
     </aside>
   );
 }

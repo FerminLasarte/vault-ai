@@ -57,3 +57,57 @@ export async function saveDatabaseCopy(defaultName: string): Promise<boolean> {
   await invoke("backup_database", { destination });
   return true;
 }
+
+const ATTACHMENT_FILTER = [
+  { name: "Comprobantes", extensions: ["png", "jpg", "jpeg", "webp", "heic", "pdf"] },
+];
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  heic: "image/heic",
+  pdf: "application/pdf",
+};
+
+export interface PickedAttachment {
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  contentBase64: string;
+}
+
+// Returns the chosen file already encoded, or null when the dialog was
+// dismissed. Rust enforces the size ceiling and reports it as an error.
+export async function pickAttachment(): Promise<PickedAttachment | null> {
+  const path = await open({
+    multiple: false,
+    directory: false,
+    filters: ATTACHMENT_FILTER,
+  });
+  if (path === null || typeof path !== "string") return null;
+
+  const contentBase64 = await invoke<string>("read_file_base64", { path });
+  const fileName = path.split("/").pop() ?? "comprobante";
+  const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+
+  return {
+    fileName,
+    mimeType: MIME_BY_EXTENSION[extension] ?? "application/octet-stream",
+    // base64 carries roughly 3 bytes per 4 characters, minus the padding.
+    byteSize: Math.floor((contentBase64.replace(/=+$/, "").length * 3) / 4),
+    contentBase64,
+  };
+}
+
+export async function saveAttachmentCopy(
+  fileName: string,
+  contentBase64: string,
+): Promise<boolean> {
+  const path = await save({ defaultPath: await suggestPath(fileName) });
+  if (path === null) return false;
+
+  await invoke("write_file_base64", { path, contents: contentBase64 });
+  return true;
+}

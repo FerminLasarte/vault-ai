@@ -1,5 +1,6 @@
 import type {
   Category,
+  CategoryRule,
   NewTransaction,
   PaymentMethod,
   Transaction,
@@ -7,6 +8,9 @@ import type {
   TransactionWithCategory,
 } from "@/db/schema";
 import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
+import { normalizeForSearch as normalize } from "@/lib/text";
+import { matchCategoryId } from "@/lib/categoryRules";
+import { splitTagNames } from "@/lib/text";
 
 export const CSV_HEADERS = [
   "fecha",
@@ -19,6 +23,12 @@ export const CSV_HEADERS = [
   "monto_destino",
   "descripcion",
 ] as const;
+
+// Written on export but not demanded on import, so a file produced before tags
+// existed still loads instead of being rejected for a missing column.
+export const TAGS_HEADER = "etiquetas";
+
+const EXPORT_HEADERS = [...CSV_HEADERS, TAGS_HEADER];
 
 // Quotes a field only when it needs it, per RFC 4180: a bare value stays bare,
 // which keeps the file readable in a text editor.
@@ -34,7 +44,7 @@ function formatAmount(value: number | null): string {
 }
 
 export function transactionsToCsv(transactions: TransactionWithCategory[]): string {
-  const lines = [CSV_HEADERS.join(",")];
+  const lines = [EXPORT_HEADERS.join(",")];
 
   for (const transaction of transactions) {
     lines.push(
@@ -48,6 +58,7 @@ export function transactionsToCsv(transactions: TransactionWithCategory[]): stri
         transaction.destination_payment_method_name ?? "",
         formatAmount(transaction.destination_amount),
         transaction.description ?? "",
+        splitTagNames(transaction.tag_names).join(","),
       ]
         .map(escapeField)
         .join(","),
@@ -130,14 +141,6 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((entry) => entry.length > 1 || entry[0] !== "");
 }
 
-function normalize(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 // Accepts both the Spanish labels this app exports and the raw stored values,
 // so a file edited by hand or produced elsewhere still imports.
 function parseType(value: string): TransactionType | null {
@@ -177,14 +180,24 @@ export interface ImportSkip {
   reason: string;
 }
 
+// Tags live in their own table, so an imported row carries them alongside the
+// transaction rather than inside it.
+export interface ImportedTransaction {
+  transaction: NewTransaction;
+  tags: string[];
+}
+
 export interface ImportPlan {
-  ready: NewTransaction[];
+  ready: ImportedTransaction[];
   skipped: ImportSkip[];
   duplicates: number;
 }
 
 export interface ImportContext {
   categories: Category[];
+  // Applied only to rows that arrive with no category of their own, so an
+  // explicit value in the file always wins over a rule.
+  categoryRules?: CategoryRule[];
   accounts: PaymentMethod[];
   existing: Transaction[];
   supportedCurrencies: string[];
@@ -203,7 +216,7 @@ function duplicateKey(
 }
 
 export function buildImportPlan(rows: string[][], context: ImportContext): ImportPlan {
-  const ready: NewTransaction[] = [];
+  const ready: ImportedTransaction[] = [];
   const skipped: ImportSkip[] = [];
   let duplicates = 0;
 
@@ -315,6 +328,8 @@ export function buildImportPlan(rows: string[][], context: ImportContext): Impor
           continue;
         }
         categoryId = category.id;
+      } else {
+        categoryId = matchCategoryId(description, context.categoryRules ?? []);
       }
     }
 
@@ -326,16 +341,23 @@ export function buildImportPlan(rows: string[][], context: ImportContext): Impor
     // Also guards against the same row appearing twice within one file.
     seen.add(key);
 
+    const tagColumn = column(TAGS_HEADER);
+    const tags =
+      tagColumn === -1 ? [] : splitTagNames((row[tagColumn] ?? "").trim() || null);
+
     ready.push({
-      amount,
-      type,
-      currency,
-      categoryId,
-      paymentMethodId: account?.id ?? null,
-      destinationPaymentMethodId: destinationId,
-      destinationAmount,
-      description,
-      date,
+      transaction: {
+        amount,
+        type,
+        currency,
+        categoryId,
+        paymentMethodId: account?.id ?? null,
+        destinationPaymentMethodId: destinationId,
+        destinationAmount,
+        description,
+        date,
+      },
+      tags,
     });
   }
 
