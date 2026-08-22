@@ -293,9 +293,15 @@ describe("buildImportPlan with categorisation rules", () => {
 
   it("never overrides a category the file states explicitly", () => {
     const plan = planWithRules(
-      "2026-08-01,Gasto,10,ARS,Salario,Efectivo ARS,,,Netflix mensual\n",
+      "2026-08-01,Ingreso,10,ARS,Salario,Efectivo ARS,,,Netflix mensual\n",
     );
     expect(plan.ready[0].transaction.categoryId).toBe(8);
+  });
+
+  it("does not apply an expense rule to an income row", () => {
+    // The rule points at Comida, which is an expense category.
+    const plan = planWithRules("2026-08-01,Ingreso,10,ARS,,Efectivo ARS,,,Netflix\n");
+    expect(plan.ready[0].transaction.categoryId).toBeNull();
   });
 
   it("does not categorise transfers", () => {
@@ -343,5 +349,46 @@ describe("tags through CSV", () => {
     const plan = buildImportPlan(parseCsv(csv), context);
     expect(plan.skipped).toEqual([]);
     expect(plan.ready[0].tags).toEqual(["bariloche", "viaje"]);
+  });
+});
+
+describe("categories that exist under both kinds", () => {
+  // "Trabajo" is money earned in one row and money spent in another; both are
+  // legitimate and the importer has to tell them apart by the row's type.
+  const bothKinds = {
+    ...context,
+    categories: [
+      { id: 20, name: "Trabajo", type: "income", color: "#10b981", icon: "💼" },
+      { id: 21, name: "Trabajo", type: "expense", color: "#f97316", icon: "🧰" },
+    ] as Category[],
+  };
+
+  function planFor(body: string) {
+    return buildImportPlan(parseCsv(`${CSV_HEADERS.join(",")}\n${body}`), bothKinds);
+  }
+
+  it("picks the income one for an income row", () => {
+    const plan = planFor("2026-08-01,Ingreso,100,ARS,Trabajo,Efectivo ARS,,,Sueldo\n");
+    expect(plan.ready[0].transaction.categoryId).toBe(20);
+  });
+
+  it("picks the expense one for an expense row", () => {
+    const plan = planFor("2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n");
+    expect(plan.ready[0].transaction.categoryId).toBe(21);
+  });
+
+  it("reports which kind was missing when only one exists", () => {
+    const onlyIncome = {
+      ...context,
+      categories: [
+        { id: 20, name: "Trabajo", type: "income", color: "#10b981", icon: "💼" },
+      ] as Category[],
+    };
+    const plan = buildImportPlan(
+      parseCsv(`${CSV_HEADERS.join(",")}\n2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n`),
+      onlyIncome,
+    );
+    expect(plan.ready).toEqual([]);
+    expect(plan.skipped[0].reason).toContain("gastos");
   });
 });

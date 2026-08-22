@@ -237,8 +237,15 @@ export function buildImportPlan(rows: string[][], context: ImportContext): Impor
     };
   }
 
-  const categoryByName = new Map(
-    context.categories.map((category) => [normalize(category.name), category]),
+  // Keyed by name *and* kind: the same name can legitimately exist as both an
+  // income and an expense category ("Trabajo" earned versus "Trabajo" spent),
+  // and keying by name alone silently resolved every such row to whichever one
+  // happened to come last.
+  const categoryByNameAndType = new Map(
+    context.categories.map((category) => [
+      `${normalize(category.name)}|${category.type}`,
+      category,
+    ]),
   );
   const accountByName = new Map(
     context.accounts.map((account) => [normalize(account.name), account]),
@@ -322,14 +329,29 @@ export function buildImportPlan(rows: string[][], context: ImportContext): Impor
     } else {
       const categoryName = cell("categoria");
       if (categoryName !== "") {
-        const category = categoryByName.get(normalize(categoryName));
+        const category = categoryByNameAndType.get(`${normalize(categoryName)}|${type}`);
         if (category === undefined) {
-          skipped.push({ line, reason: `Categoría desconocida: "${categoryName}"` });
+          skipped.push({
+            line,
+            reason: `No existe la categoría "${categoryName}" para ${
+              type === "income" ? "ingresos" : "gastos"
+            }`,
+          });
           continue;
         }
         categoryId = category.id;
       } else {
-        categoryId = matchCategoryId(description, context.categoryRules ?? []);
+        // A rule names one category, which is of one kind. Applying an expense
+        // rule to an income row would file the money under a category that
+        // cannot hold it, so a mismatched rule is simply not applied.
+        const suggested = matchCategoryId(description, context.categoryRules ?? []);
+        const suggestedCategory = context.categories.find(
+          (category) => category.id === suggested,
+        );
+        categoryId =
+          suggestedCategory !== undefined && suggestedCategory.type === type
+            ? suggestedCategory.id
+            : null;
       }
     }
 
