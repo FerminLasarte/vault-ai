@@ -5,7 +5,13 @@ import type {
   Transaction,
   TransactionWithCategory,
 } from "@/db/schema";
-import { buildImportPlan, parseCsv, transactionsToCsv, CSV_HEADERS } from "@/lib/csv";
+import {
+  buildImportPlan,
+  parseCsv,
+  transactionsToCsv,
+  CSV_HEADERS,
+  TAGS_HEADER,
+} from "@/lib/csv";
 
 function makeRow(
   overrides: Partial<TransactionWithCategory>,
@@ -27,6 +33,8 @@ function makeRow(
     payment_method_name: null,
     destination_payment_method_name: null,
     destination_currency: null,
+    tag_names: null,
+    attachment_count: 0,
     ...overrides,
   };
 }
@@ -94,8 +102,10 @@ describe("parseCsv", () => {
 });
 
 describe("transactionsToCsv", () => {
-  it("writes the agreed header", () => {
-    expect(transactionsToCsv([]).trim()).toBe(CSV_HEADERS.join(","));
+  it("writes the required columns plus the optional tag column", () => {
+    expect(transactionsToCsv([]).trim()).toBe(
+      [...CSV_HEADERS, TAGS_HEADER].join(","),
+    );
   });
 
   it("quotes a description containing a comma", () => {
@@ -143,7 +153,7 @@ describe("buildImportPlan", () => {
     const plan = planFor("2026-08-01,Gasto,250.5,ARS,Comida,Efectivo ARS,,,Almuerzo\n");
     expect(plan.skipped).toEqual([]);
     expect(plan.ready).toHaveLength(1);
-    expect(plan.ready[0]).toMatchObject({
+    expect(plan.ready[0].transaction).toMatchObject({
       amount: 250.5,
       type: "expense",
       currency: "ARS",
@@ -156,13 +166,13 @@ describe("buildImportPlan", () => {
 
   it("accepts the raw stored type as well as the Spanish label", () => {
     const plan = planFor("2026-08-01,income,100,ARS,Salario,Efectivo ARS,,,Sueldo\n");
-    expect(plan.ready[0].type).toBe("income");
+    expect(plan.ready[0].transaction.type).toBe("income");
   });
 
   it("resolves names ignoring case and accents", () => {
     const plan = planFor("2026-08-01,gasto,10,ARS,comida,efectivo ars,,,Café\n");
-    expect(plan.ready[0].categoryId).toBe(7);
-    expect(plan.ready[0].paymentMethodId).toBe(1);
+    expect(plan.ready[0].transaction.categoryId).toBe(7);
+    expect(plan.ready[0].transaction.paymentMethodId).toBe(1);
   });
 
   it("imports a cross-currency transfer", () => {
@@ -170,7 +180,7 @@ describe("buildImportPlan", () => {
       "2026-08-01,Transferencia,145000,ARS,,Efectivo ARS,Cuenta Bancaria USD,100,Dólares\n",
     );
     expect(plan.skipped).toEqual([]);
-    expect(plan.ready[0]).toMatchObject({
+    expect(plan.ready[0].transaction).toMatchObject({
       type: "transfer",
       amount: 145000,
       destinationPaymentMethodId: 5,
@@ -183,12 +193,12 @@ describe("buildImportPlan", () => {
     const plan = planFor(
       "2026-08-01,Transferencia,500,ARS,,Efectivo ARS,Efectivo ARS,,Movimiento\n",
     );
-    expect(plan.ready[0].destinationAmount).toBe(500);
+    expect(plan.ready[0].transaction.destinationAmount).toBe(500);
   });
 
   it("allows an empty account and leaves it unattached", () => {
     const plan = planFor("2026-08-01,Gasto,10,ARS,Comida,,,,Suelto\n");
-    expect(plan.ready[0].paymentMethodId).toBeNull();
+    expect(plan.ready[0].transaction.paymentMethodId).toBeNull();
   });
 
   it("reports the line number of every rejected row", () => {
@@ -257,5 +267,128 @@ describe("buildImportPlan", () => {
       skipped: [],
       duplicates: 0,
     });
+  });
+});
+
+describe("buildImportPlan with categorisation rules", () => {
+  const withRules = {
+    ...context,
+    categoryRules: [{ id: 1, pattern: "netflix", category_id: 7 }],
+  };
+
+  function planWithRules(body: string) {
+    return buildImportPlan(parseCsv(`${CSV_HEADERS.join(",")}\n${body}`), withRules);
+  }
+
+  it("fills in a missing category from a matching rule", () => {
+    const plan = planWithRules("2026-08-01,Gasto,10,ARS,,Efectivo ARS,,,Netflix mensual\n");
+    expect(plan.skipped).toEqual([]);
+    expect(plan.ready[0].transaction.categoryId).toBe(7);
+  });
+
+  it("leaves the category empty when no rule matches", () => {
+    const plan = planWithRules("2026-08-01,Gasto,10,ARS,,Efectivo ARS,,,Peluquería\n");
+    expect(plan.ready[0].transaction.categoryId).toBeNull();
+  });
+
+  it("never overrides a category the file states explicitly", () => {
+    const plan = planWithRules(
+      "2026-08-01,Ingreso,10,ARS,Salario,Efectivo ARS,,,Netflix mensual\n",
+    );
+    expect(plan.ready[0].transaction.categoryId).toBe(8);
+  });
+
+  it("does not apply an expense rule to an income row", () => {
+    // The rule points at Comida, which is an expense category.
+    const plan = planWithRules("2026-08-01,Ingreso,10,ARS,,Efectivo ARS,,,Netflix\n");
+    expect(plan.ready[0].transaction.categoryId).toBeNull();
+  });
+
+  it("does not categorise transfers", () => {
+    const plan = planWithRules(
+      "2026-08-01,Transferencia,10,ARS,,Efectivo ARS,Cuenta Bancaria USD,5,Netflix\n",
+    );
+    expect(plan.ready[0].transaction.categoryId).toBeNull();
+  });
+
+  it("works when no rules are supplied at all", () => {
+    const plan = planFor("2026-08-01,Gasto,10,ARS,,Efectivo ARS,,,Netflix mensual\n");
+    expect(plan.ready[0].transaction.categoryId).toBeNull();
+  });
+});
+
+describe("tags through CSV", () => {
+  it("writes an etiquetas column on export", () => {
+    const csv = transactionsToCsv([makeRow({ tag_names: "viaje,comida" })]);
+    const header = parseCsv(csv)[0];
+    expect(header.at(-1)).toBe("etiquetas");
+    expect(parseCsv(csv)[1].at(-1)).toBe("comida,viaje");
+  });
+
+  it("reads tags back on import", () => {
+    const csv = `${[...CSV_HEADERS, "etiquetas"].join(",")}\n2026-08-01,Gasto,10,ARS,Comida,Efectivo ARS,,,Almuerzo,"viaje,bariloche"\n`;
+    const plan = buildImportPlan(parseCsv(csv), context);
+    expect(plan.ready[0].tags).toEqual(["bariloche", "viaje"]);
+  });
+
+  it("still accepts a file that predates the etiquetas column", () => {
+    const plan = planFor("2026-08-01,Gasto,10,ARS,Comida,Efectivo ARS,,,Almuerzo\n");
+    expect(plan.skipped).toEqual([]);
+    expect(plan.ready[0].tags).toEqual([]);
+  });
+
+  it("round trips tags through export and import", () => {
+    const csv = transactionsToCsv([
+      makeRow({
+        description: "Cena",
+        category_name: "Comida",
+        payment_method_name: "Efectivo ARS",
+        tag_names: "viaje,bariloche",
+      }),
+    ]);
+    const plan = buildImportPlan(parseCsv(csv), context);
+    expect(plan.skipped).toEqual([]);
+    expect(plan.ready[0].tags).toEqual(["bariloche", "viaje"]);
+  });
+});
+
+describe("categories that exist under both kinds", () => {
+  // "Trabajo" is money earned in one row and money spent in another; both are
+  // legitimate and the importer has to tell them apart by the row's type.
+  const bothKinds = {
+    ...context,
+    categories: [
+      { id: 20, name: "Trabajo", type: "income", color: "#10b981", icon: "💼" },
+      { id: 21, name: "Trabajo", type: "expense", color: "#f97316", icon: "🧰" },
+    ] as Category[],
+  };
+
+  function planFor(body: string) {
+    return buildImportPlan(parseCsv(`${CSV_HEADERS.join(",")}\n${body}`), bothKinds);
+  }
+
+  it("picks the income one for an income row", () => {
+    const plan = planFor("2026-08-01,Ingreso,100,ARS,Trabajo,Efectivo ARS,,,Sueldo\n");
+    expect(plan.ready[0].transaction.categoryId).toBe(20);
+  });
+
+  it("picks the expense one for an expense row", () => {
+    const plan = planFor("2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n");
+    expect(plan.ready[0].transaction.categoryId).toBe(21);
+  });
+
+  it("reports which kind was missing when only one exists", () => {
+    const onlyIncome = {
+      ...context,
+      categories: [
+        { id: 20, name: "Trabajo", type: "income", color: "#10b981", icon: "💼" },
+      ] as Category[],
+    };
+    const plan = buildImportPlan(
+      parseCsv(`${CSV_HEADERS.join(",")}\n2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n`),
+      onlyIncome,
+    );
+    expect(plan.ready).toEqual([]);
+    expect(plan.skipped[0].reason).toContain("gastos");
   });
 });

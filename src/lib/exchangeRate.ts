@@ -9,7 +9,14 @@ const MEP_RATE_URL = "https://dolarapi.com/v1/dolares/bolsa";
 export const MEP_RATE_SOURCE = "dolarapi:bolsa";
 export const MANUAL_RATE_SOURCE = "manual";
 
+// The same provider's historical series, one quote per business day back to
+// 2018. Fetched on demand rather than at start-up: it is ~2800 records, which
+// is worth downloading once but not on every launch.
+const MEP_HISTORY_URL =
+  "https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa";
+
 const REQUEST_TIMEOUT_MS = 8000;
+const HISTORY_TIMEOUT_MS = 30000;
 
 interface DolarApiResponse {
   compra: number;
@@ -54,4 +61,41 @@ export async function fetchMepRate(): Promise<ExchangeRate> {
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+interface DolarApiHistoryEntry {
+  compra: number;
+  venta: number;
+  fecha: string;
+}
+
+// Downloads every historical quote. Entries that are malformed are skipped
+// rather than failing the whole import: one bad day should not cost the series.
+export async function fetchMepRateHistory(): Promise<ExchangeRate[]> {
+  const response = await fetch(MEP_HISTORY_URL, {
+    signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Exchange rate history request failed: ${response.status}`);
+  }
+
+  const payload: DolarApiHistoryEntry[] = await response.json();
+  const fetchedAt = new Date().toISOString();
+
+  return payload
+    .filter(
+      (entry) =>
+        typeof entry.fecha === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(entry.fecha) &&
+        isValidRate(entry.compra) &&
+        isValidRate(entry.venta),
+    )
+    .map((entry) => ({
+      date: entry.fecha,
+      buy: entry.compra,
+      sell: entry.venta,
+      source: MEP_RATE_SOURCE,
+      fetched_at: fetchedAt,
+    }));
 }

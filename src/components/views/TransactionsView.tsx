@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Paperclip,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -34,9 +51,11 @@ import { CurrencyFilter } from "@/components/CurrencyFilter";
 import { CategorySelect } from "@/components/filters/CategorySelect";
 import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
 import { TransactionForm } from "@/components/TransactionForm";
+import { AttachmentsDialog } from "@/components/AttachmentsDialog";
 import { useAppData } from "@/hooks/useAppData";
-import { applyTransactionFilters } from "@/lib/finance";
+import { applyTransactionFilters, filterByTag } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { splitTagNames } from "@/lib/text";
 import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -45,6 +64,10 @@ import type { TransactionWithCategory } from "@/db";
 // Rendering thousands of rows at once is what makes the table crawl; a page
 // worth of them is plenty for scanning and keeps the DOM small.
 const PAGE_SIZE = 50;
+
+// Sentinel for "no tag filter": the Select needs a concrete value, and a tag
+// can never be an empty string.
+const ALL_TAGS = "__all__";
 
 // An empty amount input should mean "no bound", not zero.
 function parseAmountBound(value: string): number | null {
@@ -86,6 +109,8 @@ export function TransactionsView() {
   const {
     transactions,
     categories,
+    categoryRules,
+    tags,
     paymentMethods,
     isLoading,
     isMutating,
@@ -98,6 +123,7 @@ export function TransactionsView() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState(EMPTY_DATE_RANGE);
   const [search, setSearch] = useState("");
+  const [tag, setTag] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
@@ -105,20 +131,20 @@ export function TransactionsView() {
   const [editing, setEditing] = useState<TransactionWithCategory | null>(null);
   const [pendingDeletion, setPendingDeletion] =
     useState<TransactionWithCategory | null>(null);
+  const [attaching, setAttaching] = useState<TransactionWithCategory | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      applyTransactionFilters(transactions, {
-        currency,
-        search,
-        categoryId,
-        dateFrom: dateRange.from,
-        dateTo: dateRange.to,
-        minAmount: parseAmountBound(minAmount),
-        maxAmount: parseAmountBound(maxAmount),
-      }),
-    [transactions, currency, search, categoryId, dateRange, minAmount, maxAmount],
-  );
+  const filtered = useMemo(() => {
+    const matching = applyTransactionFilters(transactions, {
+      currency,
+      search,
+      categoryId,
+      dateFrom: dateRange.from,
+      dateTo: dateRange.to,
+      minAmount: parseAmountBound(minAmount),
+      maxAmount: parseAmountBound(maxAmount),
+    });
+    return tag === null ? matching : filterByTag(matching, tag);
+  }, [transactions, currency, search, tag, categoryId, dateRange, minAmount, maxAmount]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -134,7 +160,7 @@ export function TransactionsView() {
   // Any change to the filters starts the listing over at the first page.
   useEffect(() => {
     setPage(0);
-  }, [currency, search, categoryId, dateRange, minAmount, maxAmount]);
+  }, [currency, search, tag, categoryId, dateRange, minAmount, maxAmount]);
 
   function openCreateDialog() {
     setEditing(null);
@@ -146,11 +172,14 @@ export function TransactionsView() {
     setIsFormOpen(true);
   }
 
-  async function handleSubmitTransaction(values: Parameters<typeof addTransaction>[0]) {
+  async function handleSubmitTransaction(
+    values: Parameters<typeof addTransaction>[0],
+    transactionTags: string[],
+  ) {
     if (editing) {
-      await editTransaction(editing.id, values);
+      await editTransaction(editing.id, values, transactionTags);
     } else {
-      await addTransaction(values);
+      await addTransaction(values, transactionTags);
     }
     setIsFormOpen(false);
   }
@@ -163,6 +192,7 @@ export function TransactionsView() {
 
   function resetFilters() {
     setSearch("");
+    setTag(null);
     setCategoryId(null);
     setDateRange(EMPTY_DATE_RANGE);
     setMinAmount("");
@@ -171,6 +201,7 @@ export function TransactionsView() {
 
   const hasActiveFilters =
     search !== "" ||
+    tag !== null ||
     categoryId !== null ||
     dateRange.from !== null ||
     dateRange.to !== null ||
@@ -221,6 +252,34 @@ export function TransactionsView() {
               className="w-full"
             />
           </div>
+
+          {tags.length > 0 && (
+            <div className="flex min-w-44 flex-col gap-1.5">
+              <Label htmlFor="transactions-tag">Etiqueta</Label>
+              <Select
+                items={{
+                  [ALL_TAGS]: "Todas",
+                  ...Object.fromEntries(tags.map((entry) => [entry.name, entry.name])),
+                }}
+                value={tag ?? ALL_TAGS}
+                onValueChange={(value) =>
+                  setTag(String(value) === ALL_TAGS ? null : String(value))
+                }
+              >
+                <SelectTrigger id="transactions-tag" className="w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_TAGS}>Todas</SelectItem>
+                  {tags.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.name}>
+                      {entry.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="transactions-dates">Rango de fechas</Label>
@@ -287,7 +346,7 @@ export function TransactionsView() {
                       <TableHead>Cuenta</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
-                      <TableHead className="w-20">
+                      <TableHead className="w-28">
                         <span className="sr-only">Acciones</span>
                       </TableHead>
                     </TableRow>
@@ -298,7 +357,24 @@ export function TransactionsView() {
                         <TableCell className="whitespace-nowrap text-muted-foreground">
                           {formatDate(transaction.date)}
                         </TableCell>
-                        <TableCell>{transaction.description}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <span>{transaction.description}</span>
+                            {splitTagNames(transaction.tag_names).length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {splitTagNames(transaction.tag_names).map((name) => (
+                                  <Badge
+                                    key={name}
+                                    variant="outline"
+                                    className="text-[10px]"
+                                  >
+                                    {name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">
                           {transaction.type === "transfer"
                             ? "—"
@@ -359,26 +435,46 @@ export function TransactionsView() {
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              title="Editar"
+                              title={
+                                transaction.attachment_count > 0
+                                  ? `${transaction.attachment_count} comprobante(s)`
+                                  : "Adjuntar comprobante"
+                              }
+                              className={cn(
+                                transaction.attachment_count === 0 &&
+                                  "text-muted-foreground/50",
+                              )}
+                              onClick={() => setAttaching(transaction)}
+                            >
+                              <Paperclip />
+                              <span className="sr-only">
+                                Comprobantes de {transaction.description}
+                              </span>
+                            </Button>
+                            <ActionButton
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              label="Editar"
                               onClick={() => openEditDialog(transaction)}
                             >
                               <Pencil />
                               <span className="sr-only">
                                 Editar {transaction.description}
                               </span>
-                            </Button>
-                            <Button
+                            </ActionButton>
+                            <ActionButton
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              title="Eliminar"
+                              label="Eliminar"
                               onClick={() => setPendingDeletion(transaction)}
                             >
                               <Trash2 />
                               <span className="sr-only">
                                 Eliminar {transaction.description}
                               </span>
-                            </Button>
+                            </ActionButton>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -399,31 +495,31 @@ export function TransactionsView() {
 
                 {pageCount > 1 && (
                   <div className="flex items-center gap-2">
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Página anterior"
+                      label="Página anterior"
                       disabled={safePage === 0}
                       onClick={() => setPage(safePage - 1)}
                     >
                       <ChevronLeft />
                       <span className="sr-only">Página anterior</span>
-                    </Button>
+                    </ActionButton>
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {safePage + 1} / {pageCount}
                     </span>
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Página siguiente"
+                      label="Página siguiente"
                       disabled={safePage >= pageCount - 1}
                       onClick={() => setPage(safePage + 1)}
                     >
                       <ChevronRight />
                       <span className="sr-only">Página siguiente</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 )}
               </div>
@@ -431,6 +527,13 @@ export function TransactionsView() {
           )}
         </CardContent>
       </Card>
+
+      <AttachmentsDialog
+        transaction={attaching}
+        onOpenChange={(open) => {
+          if (!open) setAttaching(null);
+        }}
+      />
 
       <AlertDialog
         open={pendingDeletion !== null}
@@ -469,6 +572,8 @@ export function TransactionsView() {
           </DialogHeader>
           <TransactionForm
             categories={categories}
+            categoryRules={categoryRules}
+            tags={tags}
             paymentMethods={paymentMethods}
             defaultCurrency={currency}
             editing={editing}

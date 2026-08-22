@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { PaymentMethod, Transaction, TransactionWithCategory } from "@/db/schema";
+import type {
+  BudgetWithCategory,
+  PaymentMethod,
+  Transaction,
+  TransactionWithCategory,
+} from "@/db/schema";
 import {
   applyTransactionFilters,
   buildMonthlyTrend,
@@ -9,6 +14,7 @@ import {
   filterByCategory,
   filterByCurrency,
   filterBySearch,
+  filterByTag,
   filterByDateRange,
   filterByMonth,
   getMonthKeysBetween,
@@ -19,6 +25,14 @@ import {
   totalBalanceByCurrency,
   convertAmount,
   consolidateByCurrency,
+  calculateBudgetProgress,
+  exceededBudgets,
+  availableYears,
+  buildRateLookup,
+  convertAtDate,
+  yearFromRange,
+  yearRange,
+  summaryInCurrency,
 } from "@/lib/finance";
 
 function makeTransaction(overrides: Partial<Transaction>): Transaction {
@@ -48,6 +62,8 @@ function makeTransactionWithCategory(
     payment_method_name: null,
     destination_payment_method_name: null,
     destination_currency: null,
+    tag_names: null,
+    attachment_count: 0,
     ...overrides,
   };
 }
@@ -688,5 +704,303 @@ describe("filterBySearch", () => {
         (t) => t.id,
       ),
     ).toEqual([2]);
+  });
+});
+
+describe("filterByTag", () => {
+  const tagged = [
+    makeTransactionWithCategory({ id: 1, tag_names: "viaje,comida" }),
+    makeTransactionWithCategory({ id: 2, tag_names: "Viaje" }),
+    makeTransactionWithCategory({ id: 3, tag_names: null }),
+    makeTransactionWithCategory({ id: 4, tag_names: "trabajo" }),
+  ];
+
+  it("keeps only the transactions carrying the tag", () => {
+    expect(filterByTag(tagged, "viaje").map((t) => t.id)).toEqual([1, 2]);
+  });
+
+  it("ignores case and accents", () => {
+    const accented = [makeTransactionWithCategory({ id: 1, tag_names: "Bariloche" })];
+    expect(filterByTag(accented, "bariloche")).toHaveLength(1);
+  });
+
+  it("matches whole tags, not fragments", () => {
+    expect(filterByTag(tagged, "via")).toEqual([]);
+  });
+
+  it("treats an empty tag as no constraint", () => {
+    expect(filterByTag(tagged, "")).toHaveLength(4);
+  });
+
+  it("excludes transactions with no tags at all", () => {
+    expect(filterByTag(tagged, "trabajo").map((t) => t.id)).toEqual([4]);
+  });
+});
+
+describe("calculateBudgetProgress", () => {
+  function makeBudget(
+    overrides: Partial<BudgetWithCategory> = {},
+  ): BudgetWithCategory {
+    return {
+      id: 1,
+      category_id: 3,
+      currency: "ARS",
+      amount: 1000,
+      period: "monthly",
+      category_name: "Comida",
+      category_icon: "🍽️",
+      category_color: "#f97316",
+      ...overrides,
+    };
+  }
+
+  const reference = new Date(2026, 7, 15); // agosto de 2026
+
+  it("adds up the expenses of the current month", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 300, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({ id: 2, type: "expense", amount: 200, category_id: 3, date: "2026-08-20" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.spent).toBe(500);
+    expect(progress.remaining).toBe(500);
+    expect(progress.ratio).toBe(0.5);
+    expect(progress.isExceeded).toBe(false);
+  });
+
+  it("ignores expenses from another month", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 900, category_id: 3, date: "2026-07-31" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.spent).toBe(0);
+  });
+
+  it("counts the whole year for an annual budget", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 400, category_id: 3, date: "2026-01-10" }),
+      makeTransaction({ id: 2, type: "expense", amount: 400, category_id: 3, date: "2026-08-10" }),
+      makeTransaction({ id: 3, type: "expense", amount: 400, category_id: 3, date: "2025-08-10" }),
+    ];
+    const [progress] = calculateBudgetProgress(
+      [makeBudget({ period: "annual", amount: 5000 })],
+      transactions,
+      reference,
+    );
+    expect(progress.spent).toBe(800);
+  });
+
+  it("ignores another category and another currency", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 500, category_id: 4, date: "2026-08-02" }),
+      makeTransaction({ id: 2, type: "expense", amount: 500, category_id: 3, currency: "USD", date: "2026-08-02" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.spent).toBe(0);
+  });
+
+  it("does not let income refund the budget", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 600, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({ id: 2, type: "income", amount: 600, category_id: 3, date: "2026-08-03" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.spent).toBe(600);
+  });
+
+  it("ignores transfers entirely", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "transfer", amount: 5000, category_id: 3, date: "2026-08-02" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.spent).toBe(0);
+  });
+
+  it("reports a ratio above one when the cap is passed", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 1800, category_id: 3, date: "2026-08-02" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.ratio).toBeCloseTo(1.8);
+    expect(progress.remaining).toBe(-800);
+    expect(progress.isExceeded).toBe(true);
+  });
+
+  it("treats spending exactly the cap as not exceeded", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 1000, category_id: 3, date: "2026-08-02" }),
+    ];
+    const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
+    expect(progress.isExceeded).toBe(false);
+  });
+
+  it("does not divide by zero on a cap of zero", () => {
+    const [progress] = calculateBudgetProgress(
+      [makeBudget({ amount: 0 })],
+      [],
+      reference,
+    );
+    expect(Number.isFinite(progress.ratio)).toBe(true);
+    expect(progress.ratio).toBe(1);
+  });
+
+  it("picks out only the exceeded ones", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "expense", amount: 1800, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({ id: 2, type: "expense", amount: 100, category_id: 4, date: "2026-08-02" }),
+    ];
+    const progress = calculateBudgetProgress(
+      [makeBudget(), makeBudget({ id: 2, category_id: 4 })],
+      transactions,
+      reference,
+    );
+    expect(exceededBudgets(progress).map((entry) => entry.budget.id)).toEqual([1]);
+  });
+});
+
+describe("buildRateLookup", () => {
+  const rates = [
+    { date: "2026-08-03", sell: 1500 },
+    { date: "2026-08-01", sell: 1400 },
+    { date: "2026-08-05", sell: 1600 },
+  ];
+
+  it("returns the quote of that exact day", () => {
+    expect(buildRateLookup(rates)("2026-08-03")).toBe(1500);
+  });
+
+  it("falls back to the last quote before a day with none", () => {
+    // The 4th is a day the market did not quote.
+    expect(buildRateLookup(rates)("2026-08-04")).toBe(1500);
+  });
+
+  it("uses the latest quote for a date after the series", () => {
+    expect(buildRateLookup(rates)("2026-12-31")).toBe(1600);
+  });
+
+  it("uses the first quote for a date before the series", () => {
+    expect(buildRateLookup(rates)("2017-01-01")).toBe(1400);
+  });
+
+  it("returns null when there is no history at all", () => {
+    expect(buildRateLookup([])("2026-08-03")).toBeNull();
+  });
+
+  it("does not care what order the rates arrive in", () => {
+    const shuffled = [...rates].reverse();
+    expect(buildRateLookup(shuffled)("2026-08-04")).toBe(1500);
+  });
+});
+
+describe("convertAtDate", () => {
+  const rateAt = buildRateLookup([
+    { date: "2024-01-01", sell: 800 },
+    { date: "2026-08-01", sell: 1600 },
+  ]);
+
+  it("leaves the amount alone when the currency matches", () => {
+    expect(convertAtDate(100, "ARS", "ARS", "2024-06-01", rateAt)).toBe(100);
+  });
+
+  it("values an old movement at the rate of its own time", () => {
+    expect(convertAtDate(8000, "ARS", "USD", "2024-06-01", rateAt)).toBe(10);
+  });
+
+  it("values a recent one at the recent rate", () => {
+    expect(convertAtDate(8000, "ARS", "USD", "2026-08-10", rateAt)).toBe(5);
+  });
+
+  it("returns null without any history", () => {
+    expect(convertAtDate(100, "ARS", "USD", "2026-08-10", buildRateLookup([]))).toBeNull();
+  });
+});
+
+describe("summaryInCurrency", () => {
+  const rateAt = buildRateLookup([
+    { date: "2024-01-01", sell: 800 },
+    { date: "2026-08-01", sell: 1600 },
+  ]);
+
+  it("values each movement at its own date", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "income", amount: 8000, currency: "ARS", date: "2024-06-01" }),
+      makeTransaction({ id: 2, type: "expense", amount: 8000, currency: "ARS", date: "2026-08-10" }),
+    ];
+    // 8000 pesos was 10 dollars then and 5 dollars now.
+    expect(summaryInCurrency(transactions, "USD", rateAt)).toEqual({
+      income: 10,
+      expenses: 5,
+      balance: 5,
+    });
+  });
+
+  it("mixes currencies without double converting", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "income", amount: 1600, currency: "ARS", date: "2026-08-10" }),
+      makeTransaction({ id: 2, type: "income", amount: 5, currency: "USD", date: "2026-08-10" }),
+    ];
+    expect(summaryInCurrency(transactions, "USD", rateAt)?.income).toBe(6);
+  });
+
+  it("leaves transfers out, as the other summaries do", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "transfer", amount: 100000, currency: "ARS", date: "2026-08-10" }),
+    ];
+    expect(summaryInCurrency(transactions, "USD", rateAt)).toEqual({
+      income: 0,
+      expenses: 0,
+      balance: 0,
+    });
+  });
+
+  it("returns null without any history", () => {
+    const transactions = [
+      makeTransaction({ id: 1, type: "income", amount: 100, currency: "ARS" }),
+    ];
+    expect(summaryInCurrency(transactions, "USD", buildRateLookup([]))).toBeNull();
+  });
+});
+
+describe("yearRange and yearFromRange", () => {
+  it("spans the whole calendar year", () => {
+    expect(yearRange(2026)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  });
+
+  it("recognises a range that is exactly one year", () => {
+    expect(yearFromRange(yearRange(2026))).toBe(2026);
+  });
+
+  it("does not recognise a partial year", () => {
+    expect(yearFromRange({ from: "2026-01-01", to: "2026-06-30" })).toBeNull();
+  });
+
+  it("does not recognise a range spanning two years", () => {
+    expect(yearFromRange({ from: "2026-01-01", to: "2027-12-31" })).toBeNull();
+  });
+
+  it("returns null for an open range", () => {
+    expect(yearFromRange({ from: null, to: null })).toBeNull();
+    expect(yearFromRange({ from: "2026-01-01", to: null })).toBeNull();
+  });
+
+  it("round trips every year it produces", () => {
+    for (const year of [2019, 2024, 2026]) {
+      expect(yearFromRange(yearRange(year))).toBe(year);
+    }
+  });
+});
+
+describe("availableYears", () => {
+  it("lists the years that have movements, newest first", () => {
+    const transactions = [
+      makeTransaction({ id: 1, date: "2024-03-01" }),
+      makeTransaction({ id: 2, date: "2026-08-01" }),
+      makeTransaction({ id: 3, date: "2026-01-01" }),
+    ];
+    expect(availableYears(transactions)).toEqual([2026, 2024]);
+  });
+
+  it("returns nothing when there are no transactions", () => {
+    expect(availableYears([])).toEqual([]);
   });
 });

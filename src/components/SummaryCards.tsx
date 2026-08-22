@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import { convertAmount } from "@/lib/finance";
 import type { FinancialSummary } from "@/lib/finance";
 
 interface SummaryCardsProps {
@@ -16,9 +15,13 @@ interface SummaryCardsProps {
   summary: FinancialSummary;
   currency: string;
   isLoading: boolean;
-  // How many ARS one USD is worth, or null while no quote is known. Drives the
-  // secondary equivalent under each figure.
-  rate: number | null;
+  // The same totals expressed in the other currency, already converted with
+  // each movement valued at its own date. Null when no quote is known at all.
+  convertedSummary: FinancialSummary | null;
+  convertedCurrency: string;
+  // Whether the conversion used the historical series or just today's quote,
+  // so the figures never imply more precision than they have.
+  usesHistoricalRates: boolean;
 }
 
 const CARD_DEFINITIONS = [
@@ -31,9 +34,21 @@ export function SummaryCards({
   summary,
   currency,
   isLoading,
-  rate,
+  convertedSummary,
+  convertedCurrency,
+  usesHistoricalRates,
 }: SummaryCardsProps) {
-  const otherCurrency = currency === "ARS" ? "USD" : "ARS";
+  const convertedValues: Record<
+    (typeof CARD_DEFINITIONS)[number]["key"],
+    number
+  > | null = convertedSummary
+    ? {
+        balance: convertedSummary.balance,
+        income: convertedSummary.income,
+        expenses: convertedSummary.expenses,
+      }
+    : null;
+
   const values: Record<(typeof CARD_DEFINITIONS)[number]["key"], number> = {
     balance: summary.balance,
     income: summary.income,
@@ -58,13 +73,17 @@ export function SummaryCards({
           </CardHeader>
           <CardContent className="flex items-center justify-between gap-2">
             <Icon className="size-5 text-muted-foreground" />
-            {!isLoading && rate !== null && (
-              <span className="text-xs text-muted-foreground">
-                ≈{" "}
-                {formatCurrency(
-                  convertAmount(values[key], currency, otherCurrency, rate) ?? 0,
-                  otherCurrency,
-                )}
+            {!isLoading && convertedValues !== null && (
+              <span
+                className="text-xs text-muted-foreground"
+                title={
+                  usesHistoricalRates
+                    ? "Cada movimiento valuado a la cotización de su fecha"
+                    : "Valuado a la cotización de hoy. Traé el histórico en Ajustes para mayor precisión"
+                }
+              >
+                ≈ {formatCurrency(convertedValues[key], convertedCurrency)}
+                {!usesHistoricalRates && " *"}
               </span>
             )}
           </CardContent>

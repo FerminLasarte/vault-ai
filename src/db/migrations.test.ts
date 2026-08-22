@@ -105,9 +105,15 @@ describe("migrations", () => {
     ).split("\n");
     expect(tables).toEqual(
       expect.arrayContaining([
+        "attachments",
+        "budgets",
         "categories",
+        "category_rules",
         "exchange_rates",
         "payment_methods",
+        "recurring_transactions",
+        "tags",
+        "transaction_tags",
         "transactions",
       ]),
     );
@@ -163,6 +169,55 @@ describe("migrations", () => {
         database,
         `INSERT INTO transactions (amount, type, description, date, currency)
          VALUES (1, 'nonsense', 'x', '2026-01-01', 'ARS');`,
+      ),
+    ).toThrow();
+  });
+
+  // Foreign keys are enforced, so a category that a rule points at could not be
+  // deleted at all without the cascade — the Categories view would just fail.
+  it("removes a category's rules along with the category", () => {
+    const database = newDatabase("cascade");
+    applyMigrations(database);
+    sql(
+      database,
+      `INSERT INTO category_rules (pattern, category_id) VALUES ('netflix', 5);`,
+    );
+    expect(query(database, "SELECT COUNT(*) FROM category_rules;")).toBe("1");
+
+    sql(database, "PRAGMA foreign_keys=ON; DELETE FROM categories WHERE id = 5;");
+    expect(query(database, "SELECT COUNT(*) FROM category_rules;")).toBe("0");
+  });
+
+  // Both tables point AT transactions, so deleting one must not leave orphans
+  // behind — and with foreign keys enforced it could not, but the cascade is
+  // what makes the delete succeed at all rather than failing.
+  it("removes a transaction's tags and attachments along with it", () => {
+    const database = newDatabase("transaction-cascade");
+    applyMigrations(database);
+    sql(
+      database,
+      `INSERT INTO transactions (id, amount, type, description, date, currency)
+         VALUES (1, 10, 'expense', 'x', '2026-01-01', 'ARS');
+       INSERT INTO tags (id, name) VALUES (1, 'viaje');
+       INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (1, 1);
+       INSERT INTO attachments
+         (transaction_id, file_name, mime_type, byte_size, content_base64, created_at)
+         VALUES (1, 'a.png', 'image/png', 3, 'AAA', '2026-01-01T00:00:00Z');`,
+    );
+
+    sql(database, "PRAGMA foreign_keys=ON; DELETE FROM transactions WHERE id = 1;");
+    expect(query(database, "SELECT COUNT(*) FROM transaction_tags;")).toBe("0");
+    expect(query(database, "SELECT COUNT(*) FROM attachments;")).toBe("0");
+  });
+
+  it("rejects a budget period it does not understand", () => {
+    const database = newDatabase("budget-check");
+    applyMigrations(database);
+    expect(() =>
+      sql(
+        database,
+        `INSERT INTO budgets (category_id, currency, amount, period)
+         VALUES (3, 'ARS', 100, 'weekly');`,
       ),
     ).toThrow();
   });

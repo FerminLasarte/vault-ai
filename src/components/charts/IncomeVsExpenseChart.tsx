@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatMonthLabel } from "@/lib/format";
+import { formatCompactAmount, formatCurrency, formatMonthLabel } from "@/lib/format";
 import type { MonthlyTrendEntry } from "@/lib/finance";
 
 interface IncomeVsExpenseChartProps {
@@ -72,8 +72,8 @@ export function IncomeVsExpenseChart({
                 tickLine={false}
                 axisLine={false}
                 tick={axisTick}
-                width={48}
-                tickFormatter={(value: number) => formatCurrency(value, currency)}
+                width={64}
+                tickFormatter={formatCompactAmount}
               />
               <Tooltip
                 cursor={{ fill: "var(--muted)" }}

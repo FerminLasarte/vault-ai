@@ -52,3 +52,16 @@ export function formatMonthLabel(monthKey: string, style: "long" | "short" = "lo
   const label = formatter.format(date);
   return style === "long" ? capitalize(label) : label;
 }
+
+const compactFormatter = new Intl.NumberFormat("es-ES", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+// Short form for chart axis ticks. A tick has to read at a glance and has very
+// little room: "8 mil" carries the magnitude that "8000,00 ARS" buries, and the
+// currency is deliberately left off because repeating it on every tick is noise
+// the tooltip and the summary cards already cover.
+export function formatCompactAmount(value: number): string {
+  return compactFormatter.format(value);
+}

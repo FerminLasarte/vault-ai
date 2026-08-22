@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryDialog } from "@/components/CategoryDialog";
+import { CategoryRulesCard } from "@/components/CategoryRulesCard";
 import { useAppData } from "@/hooks/useAppData";
 import { CATEGORY_TYPE_LABELS } from "@/lib/labels";
 import type { Category, CategoryType, NewCategory } from "@/db";
@@ -124,26 +126,26 @@ export function CategoriesView() {
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1">
-                          <Button
+                          <ActionButton
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            title="Editar"
+                            label="Editar"
                             onClick={() => openEditDialog(category)}
                           >
                             <Pencil />
                             <span className="sr-only">Editar {category.name}</span>
-                          </Button>
-                          <Button
+                          </ActionButton>
+                          <ActionButton
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            title="Eliminar"
+                            label="Eliminar"
                             onClick={() => setPendingDeletion(category)}
                           >
                             <Trash2 />
                             <span className="sr-only">Eliminar {category.name}</span>
-                          </Button>
+                          </ActionButton>
                         </div>
                       </li>
                     ))}
@@ -154,6 +156,8 @@ export function CategoriesView() {
           ))}
         </div>
       )}
+
+      <CategoryRulesCard />
 
       <CategoryDialog
         open={isFormOpen}

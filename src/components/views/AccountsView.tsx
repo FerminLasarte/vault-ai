@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -29,6 +30,7 @@ import {
   totalBalanceByCurrency,
 } from "@/lib/finance";
 import { formatCurrency } from "@/lib/format";
+import { outstandingByCurrency } from "@/lib/installments";
 import { PAYMENT_METHOD_TYPE_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { NewPaymentMethod, PaymentMethod } from "@/db";
@@ -37,6 +39,7 @@ export function AccountsView() {
   const {
     paymentMethods,
     transactions,
+    installmentPlans,
     exchangeRate,
     isLoading,
     isMutating,
@@ -60,6 +63,16 @@ export function AccountsView() {
   const currencyTotals = useMemo(
     () => Array.from(totalsByCurrency),
     [totalsByCurrency],
+  );
+
+  const debtByCurrency = useMemo(
+    () => outstandingByCurrency(installmentPlans),
+    [installmentPlans],
+  );
+
+  const debtArs = useMemo(
+    () => consolidateByCurrency(debtByCurrency, "ARS", exchangeRate?.sell ?? 0),
+    [debtByCurrency, exchangeRate],
   );
 
   // Null whenever there is no usable rate yet, which the card reports instead
@@ -131,11 +144,9 @@ export function AccountsView() {
 
             <Card>
               <CardHeader>
-                <CardDescription>Patrimonio total</CardDescription>
+                <CardDescription>Patrimonio bruto</CardDescription>
                 <CardTitle className="text-2xl">
-                  {netWorthArs === null
-                    ? "—"
-                    : formatCurrency(netWorthArs, "ARS")}
+                  {netWorthArs === null ? "—" : formatCurrency(netWorthArs, "ARS")}
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
                   {netWorthUsd === null
@@ -145,6 +156,38 @@ export function AccountsView() {
               </CardHeader>
             </Card>
           </div>
+
+          {/* Shown only when there is debt: an always-visible pair of zeroes
+              would add noise for anyone who never buys in instalments. */}
+          {debtArs !== null && debtArs > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardDescription>Deuda pendiente</CardDescription>
+                  <CardTitle className="text-2xl text-red-600 dark:text-red-400">
+                    {formatCurrency(debtArs, "ARS")}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Cuotas que todavía no registraste
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardDescription>Patrimonio neto</CardDescription>
+                  <CardTitle className="text-2xl">
+                    {netWorthArs === null
+                      ? "—"
+                      : formatCurrency(netWorthArs - debtArs, "ARS")}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Bruto menos la deuda pendiente
+                  </p>
+                </CardHeader>
+              </Card>
+            </div>
+          )}
 
           <ExchangeRateBar />
         </div>
@@ -195,26 +238,26 @@ export function AccountsView() {
                   </span>
 
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Editar"
+                      label="Editar"
                       onClick={() => openEditDialog(method)}
                     >
                       <Pencil />
                       <span className="sr-only">Editar {method.name}</span>
-                    </Button>
-                    <Button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Eliminar"
+                      label="Eliminar"
                       onClick={() => setPendingDeletion(method)}
                     >
                       <Trash2 />
                       <span className="sr-only">Eliminar {method.name}</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}
