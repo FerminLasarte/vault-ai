@@ -24,8 +24,12 @@ lerna-debug.log*
 src-tauri/target
 src-tauri/gen/schemas
 
-# Claude Code
-.claude
+# Claude Code — shared project knowledge is versioned alongside the code it
+# describes, so it survives a clean checkout and its staleness shows up in
+# diffs. Machine-specific settings stay out.
+.claude/*
+!.claude/skills/
+.claude/settings.local.json
 
 # Editor directories and files
 .vscode/*
