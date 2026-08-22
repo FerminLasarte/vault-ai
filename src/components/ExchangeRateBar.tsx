@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Dialog,
   DialogContent,
@@ -71,28 +72,28 @@ export function ExchangeRateBar() {
         <span>Sin cotización todavía. Conéctate a internet o cárgala a mano.</span>
       )}
 
-      <Button
+      <ActionButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        title="Actualizar cotización"
+        label="Actualizar cotización"
         disabled={isRefreshingRate}
         onClick={() => void refreshExchangeRate()}
       >
         <RefreshCw className={cn(isRefreshingRate && "animate-spin")} />
         <span className="sr-only">Actualizar cotización</span>
-      </Button>
+      </ActionButton>
 
-      <Button
+      <ActionButton
         type="button"
         variant="ghost"
         size="icon-sm"
-        title="Corregir cotización"
+        label="Corregir cotización"
         onClick={() => setIsEditing(true)}
       >
         <Pencil />
         <span className="sr-only">Corregir cotización</span>
-      </Button>
+      </ActionButton>
 
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
         <DialogContent>

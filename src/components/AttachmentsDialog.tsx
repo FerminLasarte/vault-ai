@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, Eye, Paperclip, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Dialog,
   DialogContent,
@@ -133,39 +134,39 @@ export function AttachmentsDialog({
 
                   <div className="flex shrink-0 items-center gap-1">
                     {meta.mime_type.startsWith("image/") && (
-                      <Button
+                      <ActionButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        title="Ver"
+                        label="Ver"
                         onClick={() => void handlePreview(meta)}
                       >
                         <Eye />
                         <span className="sr-only">Ver {meta.file_name}</span>
-                      </Button>
+                      </ActionButton>
                     )}
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Guardar una copia"
+                      label="Guardar una copia"
                       disabled={isBusy}
                       onClick={() => void handleSaveCopy(meta)}
                     >
                       <Download />
                       <span className="sr-only">Guardar {meta.file_name}</span>
-                    </Button>
-                    <Button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Eliminar"
+                      label="Eliminar"
                       disabled={isMutating}
                       onClick={() => void handleDelete(meta)}
                     >
                       <Trash2 />
                       <span className="sr-only">Eliminar {meta.file_name}</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}

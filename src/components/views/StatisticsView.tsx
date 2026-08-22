@@ -3,6 +3,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CurrencyFilter } from "@/components/CurrencyFilter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CategorySelect } from "@/components/filters/CategorySelect";
 import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -13,16 +20,19 @@ import { useAppData } from "@/hooks/useAppData";
 import { AlertTriangle, Repeat } from "lucide-react";
 import {
   applyTransactionFilters,
+  availableYears,
+  buildMonthlyTrend,
   buildRateLookup,
   calculateBudgetProgress,
-  exceededBudgets,
-  summaryInCurrency,
-  buildMonthlyTrend,
   calculateSummary,
   currentMonthKey,
+  exceededBudgets,
   getMonthKeysBetween,
   getRecentMonthKeys,
   groupExpensesByCategory,
+  summaryInCurrency,
+  yearFromRange,
+  yearRange,
 } from "@/lib/finance";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
@@ -30,6 +40,10 @@ import { collectPendingInstallments } from "@/lib/pendingInstallments";
 import { todayIsoDate } from "@/lib/format";
 
 const TREND_MONTHS = 6;
+
+// Sentinel for "no year filter": the Select needs a concrete value, and no real
+// year can collide with it.
+const ALL_YEARS = "__all__";
 
 export function StatisticsView() {
   const {
@@ -75,6 +89,12 @@ export function StatisticsView() {
       }),
     [transactions, currency, categoryId, dateRange],
   );
+
+  const years = useMemo(() => availableYears(transactions), [transactions]);
+
+  // Derived from the range rather than held separately: with its own state the
+  // selector could end up naming a year the charts are no longer showing.
+  const selectedYear = yearFromRange(dateRange);
 
   const summary = useMemo(() => calculateSummary(filtered), [filtered]);
 
@@ -174,6 +194,38 @@ export function StatisticsView() {
               className="w-full"
             />
           </div>
+
+          {years.length > 0 && (
+            <div className="flex min-w-36 flex-col gap-1.5">
+              <Label htmlFor="statistics-year">Año</Label>
+              <Select
+                items={{
+                  [ALL_YEARS]: "Todos",
+                  ...Object.fromEntries(years.map((year) => [String(year), String(year)])),
+                }}
+                value={selectedYear === null ? ALL_YEARS : String(selectedYear)}
+                onValueChange={(value) =>
+                  setDateRange(
+                    String(value) === ALL_YEARS
+                      ? EMPTY_DATE_RANGE
+                      : yearRange(Number(value)),
+                  )
+                }
+              >
+                <SelectTrigger id="statistics-year" className="w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_YEARS}>Todos</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="statistics-dates">Rango de fechas</Label>

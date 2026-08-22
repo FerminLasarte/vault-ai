@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -237,26 +238,26 @@ export function AccountsView() {
                   </span>
 
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Editar"
+                      label="Editar"
                       onClick={() => openEditDialog(method)}
                     >
                       <Pencil />
                       <span className="sr-only">Editar {method.name}</span>
-                    </Button>
-                    <Button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Eliminar"
+                      label="Eliminar"
                       onClick={() => setPendingDeletion(method)}
                     >
                       <Trash2 />
                       <span className="sr-only">Eliminar {method.name}</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}

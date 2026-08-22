@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -119,27 +120,27 @@ export function CategoryRulesCard() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button
+                  <ActionButton
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    title="Editar"
+                    label="Editar"
                     onClick={() => openEdit(rule)}
                   >
                     <Pencil />
                     <span className="sr-only">Editar regla {rule.pattern}</span>
-                  </Button>
-                  <Button
+                  </ActionButton>
+                  <ActionButton
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    title="Eliminar"
+                    label="Eliminar"
                     disabled={isMutating}
                     onClick={() => void removeCategoryRule(rule.id)}
                   >
                     <Trash2 />
                     <span className="sr-only">Eliminar regla {rule.pattern}</span>
-                  </Button>
+                  </ActionButton>
                 </div>
               </li>
             ))}

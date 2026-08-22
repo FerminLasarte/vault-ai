@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -145,11 +146,11 @@ export function DebtsView() {
                     <span className="text-sm font-medium tabular-nums text-red-600 dark:text-red-400">
                       -{formatCurrency(entry.amount, entry.plan.currency)}
                     </span>
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Registrar cuota"
+                      label="Registrar cuota"
                       disabled={isMutating}
                       onClick={() =>
                         void confirmInstallment(
@@ -164,7 +165,7 @@ export function DebtsView() {
                       <span className="sr-only">
                         Registrar cuota {entry.number} de {entry.plan.description}
                       </span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}
@@ -230,11 +231,11 @@ export function DebtsView() {
                         <span className="text-sm tabular-nums text-muted-foreground">
                           {formatCurrency(remaining, plan.currency)} pendiente
                         </span>
-                        <Button
+                        <ActionButton
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          title="Editar"
+                          label="Editar"
                           onClick={() => {
                             setEditing(plan);
                             setIsFormOpen(true);
@@ -242,17 +243,17 @@ export function DebtsView() {
                         >
                           <Pencil />
                           <span className="sr-only">Editar {plan.description}</span>
-                        </Button>
-                        <Button
+                        </ActionButton>
+                        <ActionButton
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          title="Eliminar"
+                          label="Eliminar"
                           onClick={() => setPendingDeletion(plan)}
                         >
                           <Trash2 />
                           <span className="sr-only">Eliminar {plan.description}</span>
-                        </Button>
+                        </ActionButton>
                       </div>
                     </div>
 

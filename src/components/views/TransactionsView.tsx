@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -450,30 +451,30 @@ export function TransactionsView() {
                                 Comprobantes de {transaction.description}
                               </span>
                             </Button>
-                            <Button
+                            <ActionButton
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              title="Editar"
+                              label="Editar"
                               onClick={() => openEditDialog(transaction)}
                             >
                               <Pencil />
                               <span className="sr-only">
                                 Editar {transaction.description}
                               </span>
-                            </Button>
-                            <Button
+                            </ActionButton>
+                            <ActionButton
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              title="Eliminar"
+                              label="Eliminar"
                               onClick={() => setPendingDeletion(transaction)}
                             >
                               <Trash2 />
                               <span className="sr-only">
                                 Eliminar {transaction.description}
                               </span>
-                            </Button>
+                            </ActionButton>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -494,31 +495,31 @@ export function TransactionsView() {
 
                 {pageCount > 1 && (
                   <div className="flex items-center gap-2">
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Página anterior"
+                      label="Página anterior"
                       disabled={safePage === 0}
                       onClick={() => setPage(safePage - 1)}
                     >
                       <ChevronLeft />
                       <span className="sr-only">Página anterior</span>
-                    </Button>
+                    </ActionButton>
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {safePage + 1} / {pageCount}
                     </span>
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Página siguiente"
+                      label="Página siguiente"
                       disabled={safePage >= pageCount - 1}
                       onClick={() => setPage(safePage + 1)}
                     >
                       <ChevronRight />
                       <span className="sr-only">Página siguiente</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 )}
               </div>

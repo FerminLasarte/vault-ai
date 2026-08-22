@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { PiggyBank, Plus, Trash2, Pencil, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -150,11 +151,11 @@ export function SavingsView() {
                         {formatCurrency(entry.current, entry.goal.currency)} /{" "}
                         {formatCurrency(entry.goal.target_amount, entry.goal.currency)}
                       </span>
-                      <Button
+                      <ActionButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        title="Editar"
+                        label="Editar"
                         onClick={() => {
                           setEditing(entry.goal);
                           setIsFormOpen(true);
@@ -162,17 +163,17 @@ export function SavingsView() {
                       >
                         <Pencil />
                         <span className="sr-only">Editar {entry.goal.name}</span>
-                      </Button>
-                      <Button
+                      </ActionButton>
+                      <ActionButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        title="Eliminar"
+                        label="Eliminar"
                         onClick={() => setPendingDeletion(entry.goal)}
                       >
                         <Trash2 />
                         <span className="sr-only">Eliminar {entry.goal.name}</span>
-                      </Button>
+                      </ActionButton>
                     </div>
                   </div>
 

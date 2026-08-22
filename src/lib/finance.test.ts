@@ -27,8 +27,11 @@ import {
   consolidateByCurrency,
   calculateBudgetProgress,
   exceededBudgets,
+  availableYears,
   buildRateLookup,
   convertAtDate,
+  yearFromRange,
+  yearRange,
   summaryInCurrency,
 } from "@/lib/finance";
 
@@ -955,5 +958,49 @@ describe("summaryInCurrency", () => {
       makeTransaction({ id: 1, type: "income", amount: 100, currency: "ARS" }),
     ];
     expect(summaryInCurrency(transactions, "USD", buildRateLookup([]))).toBeNull();
+  });
+});
+
+describe("yearRange and yearFromRange", () => {
+  it("spans the whole calendar year", () => {
+    expect(yearRange(2026)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  });
+
+  it("recognises a range that is exactly one year", () => {
+    expect(yearFromRange(yearRange(2026))).toBe(2026);
+  });
+
+  it("does not recognise a partial year", () => {
+    expect(yearFromRange({ from: "2026-01-01", to: "2026-06-30" })).toBeNull();
+  });
+
+  it("does not recognise a range spanning two years", () => {
+    expect(yearFromRange({ from: "2026-01-01", to: "2027-12-31" })).toBeNull();
+  });
+
+  it("returns null for an open range", () => {
+    expect(yearFromRange({ from: null, to: null })).toBeNull();
+    expect(yearFromRange({ from: "2026-01-01", to: null })).toBeNull();
+  });
+
+  it("round trips every year it produces", () => {
+    for (const year of [2019, 2024, 2026]) {
+      expect(yearFromRange(yearRange(year))).toBe(year);
+    }
+  });
+});
+
+describe("availableYears", () => {
+  it("lists the years that have movements, newest first", () => {
+    const transactions = [
+      makeTransaction({ id: 1, date: "2024-03-01" }),
+      makeTransaction({ id: 2, date: "2026-08-01" }),
+      makeTransaction({ id: 3, date: "2026-01-01" }),
+    ];
+    expect(availableYears(transactions)).toEqual([2026, 2024]);
+  });
+
+  it("returns nothing when there are no transactions", () => {
+    expect(availableYears([])).toEqual([]);
   });
 });

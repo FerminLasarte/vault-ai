@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -131,11 +132,11 @@ export function BudgetsView() {
                         {formatCurrency(entry.spent, entry.budget.currency)} /{" "}
                         {formatCurrency(entry.budget.amount, entry.budget.currency)}
                       </span>
-                      <Button
+                      <ActionButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        title="Editar"
+                        label="Editar"
                         onClick={() => {
                           setEditing(entry.budget);
                           setIsFormOpen(true);
@@ -145,19 +146,19 @@ export function BudgetsView() {
                         <span className="sr-only">
                           Editar presupuesto de {entry.budget.category_name}
                         </span>
-                      </Button>
-                      <Button
+                      </ActionButton>
+                      <ActionButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        title="Eliminar"
+                        label="Eliminar"
                         onClick={() => setPendingDeletion(entry.budget)}
                       >
                         <Trash2 />
                         <span className="sr-only">
                           Eliminar presupuesto de {entry.budget.category_name}
                         </span>
-                      </Button>
+                      </ActionButton>
                     </div>
                   </div>
 

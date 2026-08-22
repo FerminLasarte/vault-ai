@@ -473,3 +473,41 @@ export function summaryInCurrency<T extends Transaction>(
 
   return { balance: income - expenses, income, expenses };
 }
+
+export interface DateRange {
+  from: string | null;
+  to: string | null;
+}
+
+// The full calendar year as a date range.
+export function yearRange(year: number): DateRange {
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+// Which year a range represents, or null when it is not exactly one whole year.
+//
+// The year selector reads this rather than keeping its own state: with two
+// sources of truth, picking a custom range would leave the year dropdown
+// claiming something the charts no longer show.
+export function yearFromRange(range: DateRange): number | null {
+  if (range.from === null || range.to === null) return null;
+
+  const year = Number(range.from.slice(0, 4));
+  if (!Number.isFinite(year)) return null;
+
+  const full = yearRange(year);
+  return range.from === full.from && range.to === full.to ? year : null;
+}
+
+// Years that actually have movements, most recent first, so the selector never
+// offers a year that would come back empty.
+export function availableYears(transactions: Transaction[]): number[] {
+  const years = new Set<number>();
+
+  for (const transaction of transactions) {
+    const year = Number(transaction.date.slice(0, 4));
+    if (Number.isFinite(year)) years.add(year);
+  }
+
+  return Array.from(years).sort((a, b) => b - a);
+}

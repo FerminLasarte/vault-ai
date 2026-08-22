@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Pause, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
   CardContent,
@@ -158,11 +159,11 @@ export function RecurringView() {
                       {entry.template.type === "income" ? "+" : "-"}
                       {formatCurrency(entry.template.amount, entry.template.currency)}
                     </span>
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="Registrar"
+                      label="Registrar"
                       disabled={isMutating}
                       onClick={() =>
                         void confirmRecurring(entry.template.id, entry.date)
@@ -172,12 +173,12 @@ export function RecurringView() {
                       <span className="sr-only">
                         Registrar {entry.template.description}
                       </span>
-                    </Button>
-                    <Button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Descartar"
+                      label="Descartar"
                       disabled={isMutating}
                       onClick={() =>
                         void dismissRecurring(entry.template.id, entry.date)
@@ -187,7 +188,7 @@ export function RecurringView() {
                       <span className="sr-only">
                         Descartar {entry.template.description}
                       </span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}
@@ -275,11 +276,11 @@ export function RecurringView() {
                         {template.description}
                       </span>
                     </Button>
-                    <Button
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Editar"
+                      label="Editar"
                       onClick={() => {
                         setEditing(template);
                         setIsFormOpen(true);
@@ -287,17 +288,17 @@ export function RecurringView() {
                     >
                       <Pencil />
                       <span className="sr-only">Editar {template.description}</span>
-                    </Button>
-                    <Button
+                    </ActionButton>
+                    <ActionButton
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      title="Eliminar"
+                      label="Eliminar"
                       onClick={() => setPendingDeletion(template)}
                     >
                       <Trash2 />
                       <span className="sr-only">Eliminar {template.description}</span>
-                    </Button>
+                    </ActionButton>
                   </div>
                 </li>
               ))}
