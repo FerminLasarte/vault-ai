@@ -19,6 +19,8 @@ import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
 import { formatDate, todayIsoDate } from "@/lib/format";
+import { backupStatus } from "@/lib/backupReminder";
+import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/context/ThemeContext";
 import type { ImportSkip } from "@/lib/csv";
 
@@ -45,6 +47,8 @@ export function SettingsView() {
     exchangeRateHistory,
     isRefreshingRate,
     backfillExchangeRates,
+    lastBackupAt,
+    recordBackup,
   } = useAppData();
   const { preference, setPreference } = useTheme();
 
@@ -84,7 +88,10 @@ export function SettingsView() {
       // Without this the copy would miss whatever is still in the -wal sidecar.
       await checkpointDatabase();
       const saved = await saveDatabaseCopy(`vault-ai-${todayIsoDate()}.db`);
-      if (saved) toast.success("Copia de seguridad guardada");
+      if (saved) {
+        await recordBackup();
+        toast.success("Copia de seguridad guardada");
+      }
     } catch (error) {
       console.error("Failed to back up the database:", error);
       toast.error("No se pudo guardar la copia");
@@ -131,6 +138,8 @@ export function SettingsView() {
 
   const busy = isWorking || isMutating;
 
+  const backup = backupStatus(lastBackupAt, transactions.length);
+
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
       <PageHeader
@@ -165,10 +174,26 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle>Tus datos</CardTitle>
           <CardDescription>
-            Todo vive únicamente en este equipo. Guarda una copia con regularidad.
+            Todo vive únicamente en este equipo. Si se pierde el disco, se pierde
+            todo: no hay copia en ningún servidor.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <p
+            className={cn(
+              "text-sm",
+              backup.isOverdue ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {backup.daysAgo === null
+              ? "Nunca guardaste una copia."
+              : backup.daysAgo === 0
+                ? "Última copia: hoy."
+                : backup.daysAgo === 1
+                  ? "Última copia: ayer."
+                  : `Última copia: hace ${backup.daysAgo} días.`}
+          </p>
+
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={busy} onClick={handleBackup}>
               <HardDriveDownload />

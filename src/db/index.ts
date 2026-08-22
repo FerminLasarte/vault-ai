@@ -734,6 +734,28 @@ export async function getLatestExchangeRate(): Promise<ExchangeRate | null> {
   return rows[0] ?? null;
 }
 
+// Keys the app stores about itself. Kept as constants so a typo cannot quietly
+// read a setting that was never written.
+export const LAST_BACKUP_AT = "last_backup_at";
+
+export async function getSetting(key: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM app_settings WHERE key = $1",
+    [key],
+  );
+  return rows[0]?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO app_settings (key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value],
+  );
+}
+
 export async function listExchangeRates(): Promise<ExchangeRate[]> {
   const db = await getDb();
   return db.select<ExchangeRate[]>("SELECT * FROM exchange_rates ORDER BY date");

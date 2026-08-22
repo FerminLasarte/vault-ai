@@ -20,6 +20,8 @@ import {
   deletePaymentMethod,
   deleteTransaction,
   getLatestExchangeRate,
+  getSetting,
+  LAST_BACKUP_AT,
   initDatabase,
   insertAttachment,
   insertBudget,
@@ -44,6 +46,7 @@ import {
   listTags,
   listTransactionsWithCategory,
   updateCategory,
+  setSetting,
   setTransactionTags,
   markRecurringConfirmed,
   updateBudget,
@@ -99,6 +102,8 @@ export interface AppData {
   // Every cached quote, used to value each movement at the rate of its own
   // date instead of restating the past at today's.
   exchangeRateHistory: ExchangeRate[];
+  // When the last backup was taken, or null if there has never been one.
+  lastBackupAt: string | null;
   isLoading: boolean;
   isMutating: boolean;
   isRefreshingRate: boolean;
@@ -172,6 +177,9 @@ export interface AppData {
   // Downloads the whole historical series. Explicit rather than automatic:
   // it is a few thousand records and only needs doing once.
   backfillExchangeRates: () => Promise<number>;
+  // Called after a backup actually lands on disk, so the reminder measures
+  // real copies rather than attempts.
+  recordBackup: () => Promise<void>;
 
 }
 
@@ -195,6 +203,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   >([]);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
   const [isRefreshingRate, setIsRefreshingRate] = useState(false);
@@ -214,6 +223,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       nextContributions,
       cachedRate,
       cachedHistory,
+      storedLastBackup,
     ] = await Promise.all([
       listTransactionsWithCategory(),
       listCategories(),
@@ -227,6 +237,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       listSavingsContributions(),
       getLatestExchangeRate(),
       listExchangeRates(),
+      getSetting(LAST_BACKUP_AT),
     ]);
     setTransactions(nextTransactions);
     setCategories(nextCategories);
@@ -240,6 +251,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setSavingsContributions(nextContributions);
     setExchangeRate(cachedRate);
     setExchangeRateHistory(cachedHistory);
+    setLastBackupAt(storedLastBackup);
   }, []);
 
   // Fetches the current quote and caches it. A failure is not exceptional —
@@ -264,6 +276,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const recordBackup = useCallback(async () => {
+    const takenAt = new Date().toISOString();
+    await setSetting(LAST_BACKUP_AT, takenAt);
+    setLastBackupAt(takenAt);
+  }, []);
 
   const backfillExchangeRates = useCallback(async () => {
     setIsRefreshingRate(true);
@@ -356,6 +374,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       savingsContributions,
       exchangeRate,
       exchangeRateHistory,
+      lastBackupAt,
       isLoading,
       isMutating,
       isRefreshingRate,
@@ -363,6 +382,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,
+      recordBackup,
 
       addTransaction: (transaction, transactionTags) =>
         runMutation(
@@ -617,12 +637,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       savingsContributions,
       exchangeRate,
       exchangeRateHistory,
+      lastBackupAt,
       isLoading,
       isMutating,
       isRefreshingRate,
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,
+      recordBackup,
       runMutation,
     ],
   );

@@ -17,7 +17,7 @@ import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
-import { AlertTriangle, Repeat } from "lucide-react";
+import { AlertTriangle, HardDriveDownload, Repeat } from "lucide-react";
 import {
   applyTransactionFilters,
   availableYears,
@@ -37,6 +37,7 @@ import {
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
+import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
 
 const TREND_MONTHS = 6;
@@ -54,6 +55,7 @@ export function StatisticsView() {
     installmentPlans,
     exchangeRate,
     exchangeRateHistory,
+    lastBackupAt,
     isLoading,
   } = useAppData();
 
@@ -88,6 +90,11 @@ export function StatisticsView() {
         dateTo: dateRange.to,
       }),
     [transactions, currency, categoryId, dateRange],
+  );
+
+  const backup = useMemo(
+    () => backupStatus(lastBackupAt, transactions.length),
+    [lastBackupAt, transactions.length],
   );
 
   const years = useMemo(() => availableYears(transactions), [transactions]);
@@ -156,6 +163,22 @@ export function StatisticsView() {
                     `${entry.budget.category_name} (${Math.round(entry.ratio * 100)}%)`,
                 )
                 .join(" · ")}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {backup.isOverdue && (
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <HardDriveDownload className="size-4 shrink-0 text-destructive" />
+            <span className="text-sm font-medium">
+              {backup.daysAgo === null
+                ? "Nunca guardaste una copia de seguridad"
+                : `Hace ${backup.daysAgo} días que no guardás una copia`}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              Tus datos viven solo en este equipo. Guardá una desde Ajustes.
             </span>
           </CardContent>
         </Card>

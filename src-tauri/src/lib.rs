@@ -587,6 +587,24 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // A small key-value store for things the app needs to remember about
+        // itself rather than about the user's money — starting with when the
+        // last backup was taken, which is what the reminder is measured from.
+        //
+        // Deliberately inside the database: a backup then carries the moment it
+        // was made, so restoring one on a new machine does not pretend a fresh
+        // copy was just taken.
+        Migration {
+            version: 22,
+            description: "create_app_settings_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
