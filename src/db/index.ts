@@ -150,9 +150,7 @@ export async function listTransactions(): Promise<Transaction[]> {
 
 // Joins the category and payment method names in SQL so the UI never has to
 // display a raw id or look them up client-side.
-export async function listTransactionsWithCategory(): Promise<
-  TransactionWithCategory[]
-> {
+export async function listTransactionsWithCategory(): Promise<TransactionWithCategory[]> {
   const db = await getDb();
   return db.select<TransactionWithCategory[]>(
     `SELECT t.*,
@@ -177,9 +175,7 @@ export async function listTransactionsWithCategory(): Promise<
 }
 
 // Returns the new row's id so the caller can attach tags to it.
-export async function insertTransaction(
-  transaction: NewTransaction,
-): Promise<number> {
+export async function insertTransaction(transaction: NewTransaction): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
     `INSERT INTO transactions
@@ -240,9 +236,7 @@ export async function deleteTransaction(id: number): Promise<void> {
 }
 
 // Metadata only; `getAttachmentContent` fetches the bytes when they are needed.
-export async function listAttachments(
-  transactionId: number,
-): Promise<AttachmentMeta[]> {
+export async function listAttachments(transactionId: number): Promise<AttachmentMeta[]> {
   const db = await getDb();
   return db.select<AttachmentMeta[]>(
     `SELECT id, transaction_id, file_name, mime_type, byte_size, created_at
@@ -341,10 +335,7 @@ export async function insertSavingsGoal(goal: NewSavingsGoal): Promise<void> {
   );
 }
 
-export async function updateSavingsGoal(
-  id: number,
-  goal: NewSavingsGoal,
-): Promise<void> {
+export async function updateSavingsGoal(id: number, goal: NewSavingsGoal): Promise<void> {
   const db = await getDb();
   await db.execute(
     `UPDATE savings_goals
@@ -410,9 +401,7 @@ export interface NewInstallmentPlan {
   firstDueDate: string;
 }
 
-export async function insertInstallmentPlan(
-  plan: NewInstallmentPlan,
-): Promise<void> {
+export async function insertInstallmentPlan(plan: NewInstallmentPlan): Promise<void> {
   const db = await getDb();
   await db.execute(
     `INSERT INTO installment_plans
@@ -561,10 +550,7 @@ export async function deleteRecurringTransaction(id: number): Promise<void> {
 // Records how far a series has been dealt with. Called both when an occurrence
 // is accepted into the ledger and when it is dismissed, since either way the
 // user has decided about it and it must stop being proposed.
-export async function markRecurringConfirmed(
-  id: number,
-  date: string,
-): Promise<void> {
+export async function markRecurringConfirmed(id: number, date: string): Promise<void> {
   const db = await getDb();
   await db.execute(
     "UPDATE recurring_transactions SET last_confirmed_date = $1 WHERE id = $2",
@@ -680,10 +666,10 @@ export interface NewCategoryRule {
 
 export async function insertCategoryRule(rule: NewCategoryRule): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "INSERT INTO category_rules (pattern, category_id) VALUES ($1, $2)",
-    [rule.pattern, rule.categoryId],
-  );
+  await db.execute("INSERT INTO category_rules (pattern, category_id) VALUES ($1, $2)", [
+    rule.pattern,
+    rule.categoryId,
+  ]);
 }
 
 export async function updateCategoryRule(

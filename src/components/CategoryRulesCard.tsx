@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useAppData } from "@/hooks/useAppData";
 import type { CategoryRuleWithCategory } from "@/db";
+import { toSelectValue } from "@/lib/forms";
 
 const ruleSchema = z.object({
   pattern: z.string().trim().min(2, "Escribe al menos dos caracteres"),
@@ -91,8 +92,8 @@ export function CategoryRulesCard() {
       <CardHeader>
         <CardTitle>Reglas de categorización</CardTitle>
         <CardDescription>
-          Cuando la descripción contenga el texto de una regla, la categoría se
-          completa sola. Si varias coinciden, gana la más específica.
+          Cuando la descripción contenga el texto de una regla, la categoría se completa
+          sola. Si varias coinciden, gana la más específica.
         </CardDescription>
       </CardHeader>
 
@@ -164,15 +165,17 @@ export function CategoryRulesCard() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Editar regla" : "Nueva regla"}</DialogTitle>
-            <DialogDescription>
-              No distingue mayúsculas ni acentos.
-            </DialogDescription>
+            <DialogDescription>No distingue mayúsculas ni acentos.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="rule-pattern">Si la descripción contiene</Label>
-              <Input id="rule-pattern" placeholder="Ej. netflix" {...register("pattern")} />
+              <Input
+                id="rule-pattern"
+                placeholder="Ej. netflix"
+                {...register("pattern")}
+              />
               {errors.pattern && (
                 <p className="text-xs text-destructive">{errors.pattern.message}</p>
               )}
@@ -188,7 +191,7 @@ export function CategoryRulesCard() {
                     items={Object.fromEntries(
                       categories.map((category) => [String(category.id), category.name]),
                     )}
-                    value={field.value ? String(field.value) : ""}
+                    value={toSelectValue(field.value)}
                     onValueChange={(value) => field.onChange(Number(value))}
                   >
                     <SelectTrigger id="rule-category" className="w-full">

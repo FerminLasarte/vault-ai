@@ -7,13 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatDate, parseIsoDate, toIsoDate } from "@/lib/format";
-
-export interface DateRange {
-  from: string | null;
-  to: string | null;
-}
-
-export const EMPTY_DATE_RANGE: DateRange = { from: null, to: null };
+import { EMPTY_DATE_RANGE, type DateRange } from "@/lib/finance";
 
 interface DateRangePickerProps {
   id?: string;
@@ -55,7 +49,11 @@ export function DateRangePicker({
           }
         >
           <CalendarIcon className="size-4 text-muted-foreground" />
-          {hasValue ? label : <span className="text-muted-foreground">{placeholder}</span>}
+          {hasValue ? (
+            label
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar

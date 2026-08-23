@@ -62,6 +62,7 @@ function applyMigrations(database: string, from = 0): void {
         `Migration ${migration.version} (${migration.description}) failed: ${
           (error as { stderr?: string }).stderr ?? String(error)
         }`,
+        { cause: error },
       );
     }
   }
@@ -288,7 +289,10 @@ describe("upgrading a populated database", () => {
     const database = legacyAtVersion7();
     applyMigrations(database, 7);
     expect(
-      query(database, "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NULL;"),
+      query(
+        database,
+        "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NULL;",
+      ),
     ).toBe("0");
     expect(
       Number(
@@ -326,7 +330,12 @@ describe("upgrading a populated database", () => {
     const database = legacyAtVersion7();
     expect(() => applyMigrations(database, 7)).not.toThrow();
     expect(
-      Number(query(database, "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NOT NULL;")),
+      Number(
+        query(
+          database,
+          "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NOT NULL;",
+        ),
+      ),
     ).toBeGreaterThan(0);
   });
 

@@ -29,6 +29,7 @@ import type {
   SavingsGoalWithNames,
   SavingsTrackingMode,
 } from "@/db";
+import { toSelectValue } from "@/lib/forms";
 
 const goalSchema = z
   .object({
@@ -135,8 +136,8 @@ export function SavingsGoalDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Editar objetivo" : "Nuevo objetivo"}</DialogTitle>
           <DialogDescription>
-            Elegí cómo se mide el avance: solo con el saldo de una cuenta, o
-            registrando vos cada aporte.
+            Elegí cómo se mide el avance: solo con el saldo de una cuenta, o registrando
+            vos cada aporte.
           </DialogDescription>
         </DialogHeader>
 
@@ -160,9 +161,7 @@ export function SavingsGoalDialog({
               render={({ field }) => (
                 <Tabs
                   value={field.value}
-                  onValueChange={(next) =>
-                    field.onChange(String(next) as SavingsTrackingMode)
-                  }
+                  onValueChange={(next) => field.onChange(String(next))}
                 >
                   <TabsList>
                     <TabsTrigger value="contributions">
@@ -225,12 +224,9 @@ export function SavingsGoalDialog({
                 render={({ field }) => (
                   <Select
                     items={Object.fromEntries(
-                      availableAccounts.map((method) => [
-                        String(method.id),
-                        method.name,
-                      ]),
+                      availableAccounts.map((method) => [String(method.id), method.name]),
                     )}
-                    value={field.value ? String(field.value) : ""}
+                    value={toSelectValue(field.value)}
                     onValueChange={(value) => field.onChange(Number(value))}
                     disabled={availableAccounts.length === 0}
                   >

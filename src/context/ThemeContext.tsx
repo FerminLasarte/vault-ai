@@ -34,9 +34,8 @@ function prefersDark(): boolean {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>(
-    readStoredPreference,
-  );
+  const [preference, setPreferenceState] =
+    useState<ThemePreference>(readStoredPreference);
   const [systemIsDark, setSystemIsDark] = useState(prefersDark);
 
   // Follow the OS while the preference is "system". The listener is always

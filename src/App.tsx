@@ -37,7 +37,9 @@ function App() {
     // a failure leaves no interface to fall back to. The inner one wraps only
     // the current view, so one broken screen costs the screen rather than the
     // whole window — the sidebar stays usable and the user can navigate away.
-    <ErrorBoundary fallback={(error) => <AppErrorFallback error={error} retry={() => {}} />}>
+    <ErrorBoundary
+      fallback={(error) => <AppErrorFallback error={error} retry={() => {}} />}
+    >
       <ThemeProvider>
         {/* A short delay keeps the tooltips from flashing as the pointer merely
             crosses a row of icon buttons on its way somewhere else. */}

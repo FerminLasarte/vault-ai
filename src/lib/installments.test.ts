@@ -85,22 +85,30 @@ describe("pendingInstallments", () => {
   });
 
   it("proposes nothing once the plan is finished", () => {
-    expect(
-      pendingInstallments({ ...plan, confirmed_count: 12 }, "2030-01-01"),
-    ).toEqual([]);
+    expect(pendingInstallments({ ...plan, confirmed_count: 12 }, "2030-01-01")).toEqual(
+      [],
+    );
   });
 });
 
 describe("outstandingAmount", () => {
   it("is the whole total before anything is paid", () => {
     expect(
-      outstandingAmount({ total_amount: 1200, installment_count: 12, confirmed_count: 0 }),
+      outstandingAmount({
+        total_amount: 1200,
+        installment_count: 12,
+        confirmed_count: 0,
+      }),
     ).toBe(1200);
   });
 
   it("shrinks as instalments are confirmed", () => {
     expect(
-      outstandingAmount({ total_amount: 1200, installment_count: 12, confirmed_count: 3 }),
+      outstandingAmount({
+        total_amount: 1200,
+        installment_count: 12,
+        confirmed_count: 3,
+      }),
     ).toBe(900);
   });
 

@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { BUDGET_PERIODS, BUDGET_PERIOD_LABELS } from "@/lib/labels";
-import type { BudgetPeriod, BudgetWithCategory, Category, NewBudget } from "@/db";
+import { toSelectValue } from "@/lib/forms";
+import type { BudgetWithCategory, Category, NewBudget } from "@/db";
 
 const budgetSchema = z.object({
   categoryId: z.coerce.number().int().positive("Selecciona una categoría"),
@@ -113,7 +114,7 @@ export function BudgetDialog({
                   items={Object.fromEntries(
                     categories.map((category) => [String(category.id), category.name]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 >
                   <SelectTrigger id="budget-category" className="w-full">
@@ -143,7 +144,7 @@ export function BudgetDialog({
                 <Select
                   items={BUDGET_PERIOD_LABELS}
                   value={field.value}
-                  onValueChange={(value) => field.onChange(value as BudgetPeriod)}
+                  onValueChange={(value) => field.onChange(value)}
                 >
                   <SelectTrigger id="budget-period" className="w-full">
                     <SelectValue placeholder="Selecciona un periodo" />
@@ -167,9 +168,7 @@ export function BudgetDialog({
               name="currency"
               render={({ field }) => (
                 <Select
-                  items={Object.fromEntries(
-                    CURRENCY_CODES.map((code) => [code, code]),
-                  )}
+                  items={Object.fromEntries(CURRENCY_CODES.map((code) => [code, code]))}
                   value={field.value}
                   onValueChange={(value) => value && field.onChange(value)}
                 >

@@ -28,10 +28,7 @@ interface AttachmentsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function AttachmentsDialog({
-  transaction,
-  onOpenChange,
-}: AttachmentsDialogProps) {
+export function AttachmentsDialog({ transaction, onOpenChange }: AttachmentsDialogProps) {
   const { addAttachment, removeAttachment, isMutating } = useAppData();
 
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([]);
@@ -47,8 +44,21 @@ export function AttachmentsDialog({
     setAttachments(await listAttachments(transactionId));
   }, [transactionId]);
 
-  useEffect(() => {
+  // Clearing the preview belongs in the render pass, not in an effect: an
+  // effect would let the previous transaction's receipt stay on screen for a
+  // frame after the dialog has already switched to another one.
+  const [lastTransactionId, setLastTransactionId] = useState(transactionId);
+  if (transactionId !== lastTransactionId) {
+    setLastTransactionId(transactionId);
     setPreview(null);
+  }
+
+  // Fetching, on the other hand, genuinely is a side effect: it talks to the
+  // database and the state lands only once the query has come back.
+  useEffect(() => {
+    // The state lands once the query resolves, not synchronously during the
+    // effect, so there is no cascading render for the rule to prevent.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 
@@ -107,8 +117,8 @@ export function AttachmentsDialog({
         <DialogHeader>
           <DialogTitle>Comprobantes</DialogTitle>
           <DialogDescription>
-            {transaction?.description} · se guardan dentro de la base, así que la
-            copia de seguridad los incluye.
+            {transaction?.description} · se guardan dentro de la base, así que la copia de
+            seguridad los incluye.
           </DialogDescription>
         </DialogHeader>
 

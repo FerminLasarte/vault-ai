@@ -53,8 +53,9 @@ export function DebtsView() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<InstallmentPlanWithNames | null>(null);
-  const [pendingDeletion, setPendingDeletion] =
-    useState<InstallmentPlanWithNames | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<InstallmentPlanWithNames | null>(
+    null,
+  );
 
   function openCreate() {
     setEditing(null);
@@ -115,11 +116,11 @@ export function DebtsView() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {pending.length === 1 ? "1 cuota vencida" : `${pending.length} cuotas vencidas`}
+              {pending.length === 1
+                ? "1 cuota vencida"
+                : `${pending.length} cuotas vencidas`}
             </CardTitle>
-            <CardDescription>
-              Confirmá cada una cuando la hayas pagado.
-            </CardDescription>
+            <CardDescription>Confirmá cada una cuando la hayas pagado.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <ul className="flex flex-col">
@@ -295,8 +296,8 @@ export function DebtsView() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar esta compra en cuotas?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará «{pendingDeletion?.description}». Las cuotas que ya
-              registraste se conservan como movimientos.
+              Se eliminará «{pendingDeletion?.description}». Las cuotas que ya registraste
+              se conservan como movimientos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

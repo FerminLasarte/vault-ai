@@ -30,6 +30,7 @@ import type {
   NewInstallmentPlan,
   PaymentMethod,
 } from "@/db";
+import { toSelectValue } from "@/lib/forms";
 
 const planSchema = z.object({
   description: z.string().trim().min(1, "La descripción es obligatoria"),
@@ -246,7 +247,7 @@ export function InstallmentPlanDialog({
                       category.name,
                     ]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 >
                   <SelectTrigger id="plan-category" className="w-full">
@@ -272,12 +273,9 @@ export function InstallmentPlanDialog({
               render={({ field }) => (
                 <Select
                   items={Object.fromEntries(
-                    availableAccounts.map((method) => [
-                      String(method.id),
-                      method.name,
-                    ]),
+                    availableAccounts.map((method) => [String(method.id), method.name]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                   disabled={availableAccounts.length === 0}
                 >

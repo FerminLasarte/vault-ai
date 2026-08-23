@@ -38,16 +38,14 @@ export function SummaryCards({
   convertedCurrency,
   usesHistoricalRates,
 }: SummaryCardsProps) {
-  const convertedValues: Record<
-    (typeof CARD_DEFINITIONS)[number]["key"],
-    number
-  > | null = convertedSummary
-    ? {
-        balance: convertedSummary.balance,
-        income: convertedSummary.income,
-        expenses: convertedSummary.expenses,
-      }
-    : null;
+  const convertedValues: Record<(typeof CARD_DEFINITIONS)[number]["key"], number> | null =
+    convertedSummary
+      ? {
+          balance: convertedSummary.balance,
+          income: convertedSummary.income,
+          expenses: convertedSummary.expenses,
+        }
+      : null;
 
   const values: Record<(typeof CARD_DEFINITIONS)[number]["key"], number> = {
     balance: summary.balance,

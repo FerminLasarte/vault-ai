@@ -37,8 +37,8 @@ export function AppErrorFallback({ error }: FallbackProps) {
             Algo se rompió
           </h1>
           <p className="text-sm text-muted-foreground">
-            La aplicación no pudo arrancar. Tus datos están intactos en este
-            equipo: nada se perdió.
+            La aplicación no pudo arrancar. Tus datos están intactos en este equipo: nada
+            se perdió.
           </p>
         </div>
         <Button type="button" onClick={() => window.location.reload()}>

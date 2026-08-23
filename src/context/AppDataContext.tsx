@@ -180,7 +180,6 @@ export interface AppData {
   // Called after a backup actually lands on disk, so the reminder measures
   // real copies rather than attempts.
   recordBackup: () => Promise<void>;
-
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -194,13 +193,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [budgets, setBudgets] = useState<BudgetWithCategory[]>([]);
   const [recurring, setRecurring] = useState<RecurringTransactionWithNames[]>([]);
-  const [installmentPlans, setInstallmentPlans] = useState<
-    InstallmentPlanWithNames[]
-  >([]);
+  const [installmentPlans, setInstallmentPlans] = useState<InstallmentPlanWithNames[]>(
+    [],
+  );
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalWithNames[]>([]);
-  const [savingsContributions, setSavingsContributions] = useState<
-    SavingsContribution[]
-  >([]);
+  const [savingsContributions, setSavingsContributions] = useState<SavingsContribution[]>(
+    [],
+  );
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
@@ -322,6 +321,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Loading the database on mount is what an effect is for. The rule fires
+    // because `refresh` eventually sets state, but it does so after an await:
+    // this reads an external system, it does not derive state from props.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
       .catch((error) => {
         console.error("Failed to load application data:", error);
@@ -337,13 +340,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // slow read overwrite the fresher figure the fetch just stored.
   useEffect(() => {
     if (isLoading) return;
+    // Same reason as above: a network fetch whose result arrives long after
+    // this effect has returned.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshExchangeRate({ silent: true });
   }, [isLoading, refreshExchangeRate]);
 
   // Every mutation reloads the whole dataset, so a change made in one view is
   // immediately reflected in the statistics and in every other view.
   const runMutation = useCallback(
-    async (mutation: () => Promise<void>, successMessage: string, errorMessage: string) => {
+    async (
+      mutation: () => Promise<void>,
+      successMessage: string,
+      errorMessage: string,
+    ) => {
       setIsMutating(true);
       try {
         await mutation();
@@ -622,7 +632,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           "Cuenta eliminada",
           "No se pudo eliminar la cuenta",
         ),
-
     }),
     [
       transactions,

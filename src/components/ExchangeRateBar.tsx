@@ -29,12 +29,8 @@ type RateFormInput = z.input<typeof rateSchema>;
 type RateFormValues = z.output<typeof rateSchema>;
 
 export function ExchangeRateBar() {
-  const {
-    exchangeRate,
-    isRefreshingRate,
-    refreshExchangeRate,
-    saveManualExchangeRate,
-  } = useAppData();
+  const { exchangeRate, isRefreshingRate, refreshExchangeRate, saveManualExchangeRate } =
+    useAppData();
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -100,8 +96,8 @@ export function ExchangeRateBar() {
           <DialogHeader>
             <DialogTitle>Corregir cotización</DialogTitle>
             <DialogDescription>
-              Se guarda con la fecha de hoy y reemplaza a la obtenida online. Se
-              usa el valor de venta para convertir entre pesos y dólares.
+              Se guarda con la fecha de hoy y reemplaza a la obtenida online. Se usa el
+              valor de venta para convertir entre pesos y dólares.
             </DialogDescription>
           </DialogHeader>
 
@@ -135,11 +131,7 @@ export function ExchangeRateBar() {
             </div>
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditing(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSubmitting}>

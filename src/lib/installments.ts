@@ -65,9 +65,7 @@ export function outstandingAmount(plan: {
   confirmed_count: number;
 }): number {
   const amounts = installmentAmounts(plan.total_amount, plan.installment_count);
-  return amounts
-    .slice(plan.confirmed_count)
-    .reduce((total, amount) => total + amount, 0);
+  return amounts.slice(plan.confirmed_count).reduce((total, amount) => total + amount, 0);
 }
 
 // Outstanding debt per currency, so it can sit alongside the per-currency

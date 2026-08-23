@@ -21,13 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CATEGORY_TYPE_LABELS } from "@/lib/labels";
-import {
-  DEFAULT_CATEGORY_EMOJI,
-  EMOJI_SUGGESTIONS,
-  isSingleEmoji,
-} from "@/lib/emoji";
+import { DEFAULT_CATEGORY_EMOJI, EMOJI_SUGGESTIONS, isSingleEmoji } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
-import type { Category, CategoryType, NewCategory } from "@/db";
+import type { Category, NewCategory } from "@/db";
 
 const DEFAULT_COLOR = "#64748b";
 
@@ -108,9 +104,7 @@ export function CategoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {editing ? "Editar categoría" : "Nueva categoría"}
-          </DialogTitle>
+          <DialogTitle>{editing ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
           <DialogDescription>
             Las categorías agrupan tus transacciones en los informes.
           </DialogDescription>
@@ -138,7 +132,7 @@ export function CategoryDialog({
                 <Select
                   items={CATEGORY_TYPE_LABELS}
                   value={field.value}
-                  onValueChange={(value) => field.onChange(value as CategoryType)}
+                  onValueChange={(value) => field.onChange(value)}
                 >
                   <SelectTrigger id="category-type" className="w-full">
                     <SelectValue placeholder="Selecciona un tipo" />
@@ -147,9 +141,7 @@ export function CategoryDialog({
                     <SelectItem value="expense">
                       {CATEGORY_TYPE_LABELS.expense}
                     </SelectItem>
-                    <SelectItem value="income">
-                      {CATEGORY_TYPE_LABELS.income}
-                    </SelectItem>
+                    <SelectItem value="income">{CATEGORY_TYPE_LABELS.income}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -170,9 +162,7 @@ export function CategoryDialog({
                   key={emoji}
                   type="button"
                   title={`Usar ${emoji}`}
-                  onClick={() =>
-                    setValue("icon", emoji, { shouldValidate: true })
-                  }
+                  onClick={() => setValue("icon", emoji, { shouldValidate: true })}
                   className={cn(
                     "flex size-8 items-center justify-center rounded-md text-base transition-colors hover:bg-muted",
                     selectedIcon === emoji && "bg-muted ring-1 ring-foreground/10",

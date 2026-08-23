@@ -12,8 +12,7 @@ export const MANUAL_RATE_SOURCE = "manual";
 // The same provider's historical series, one quote per business day back to
 // 2018. Fetched on demand rather than at start-up: it is ~2800 records, which
 // is worth downloading once but not on every launch.
-const MEP_HISTORY_URL =
-  "https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa";
+const MEP_HISTORY_URL = "https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa";
 
 const REQUEST_TIMEOUT_MS = 8000;
 const HISTORY_TIMEOUT_MS = 30000;
@@ -28,6 +27,16 @@ function isValidRate(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+// `response.json()` is typed `any`, so annotating the result with an interface
+// asserts a shape nobody checked — a change at the provider would surface as
+// NaN deep inside a conversion instead of as a failed fetch. These guards make
+// the parse the place where a bad payload stops.
+function isRatePayload(value: unknown): value is DolarApiResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return isValidRate(candidate.compra) && isValidRate(candidate.venta);
+}
+
 // Fetches the current MEP rate. Throws on any network, timeout or shape
 // problem; callers are expected to fall back to the last cached rate, since
 // being offline must never break the app.
@@ -40,9 +49,9 @@ export async function fetchMepRate(): Promise<ExchangeRate> {
     throw new Error(`Exchange rate request failed with status ${response.status}`);
   }
 
-  const payload: DolarApiResponse = await response.json();
+  const payload: unknown = await response.json();
 
-  if (!isValidRate(payload.compra) || !isValidRate(payload.venta)) {
+  if (!isRatePayload(payload)) {
     throw new Error("Exchange rate response did not contain usable figures");
   }
 
@@ -80,10 +89,14 @@ export async function fetchMepRateHistory(): Promise<ExchangeRate[]> {
     throw new Error(`Exchange rate history request failed: ${response.status}`);
   }
 
-  const payload: DolarApiHistoryEntry[] = await response.json();
+  const payload: unknown = await response.json();
   const fetchedAt = new Date().toISOString();
 
-  return payload
+  if (!Array.isArray(payload)) {
+    throw new Error("Exchange rate history response was not a list");
+  }
+
+  return (payload as DolarApiHistoryEntry[])
     .filter(
       (entry) =>
         typeof entry.fecha === "string" &&

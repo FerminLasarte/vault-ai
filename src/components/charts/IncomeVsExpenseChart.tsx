@@ -62,12 +62,7 @@ export function IncomeVsExpenseChart({
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={chartData} barGap={4}>
               <CartesianGrid vertical={false} stroke="var(--border)" />
-              <XAxis
-                dataKey="month"
-                tickLine={false}
-                axisLine={false}
-                tick={axisTick}
-              />
+              <XAxis dataKey="month" tickLine={false} axisLine={false} tick={axisTick} />
               <YAxis
                 tickLine={false}
                 axisLine={false}

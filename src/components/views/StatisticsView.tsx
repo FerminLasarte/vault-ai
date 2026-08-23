@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CategorySelect } from "@/components/filters/CategorySelect";
-import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { SummaryCards } from "@/components/SummaryCards";
 import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
@@ -25,6 +25,7 @@ import {
   buildRateLookup,
   calculateBudgetProgress,
   calculateSummary,
+  EMPTY_DATE_RANGE,
   currentMonthKey,
   exceededBudgets,
   getMonthKeysBetween,
@@ -224,7 +225,9 @@ export function StatisticsView() {
               <Select
                 items={{
                   [ALL_YEARS]: "Todos",
-                  ...Object.fromEntries(years.map((year) => [String(year), String(year)])),
+                  ...Object.fromEntries(
+                    years.map((year) => [String(year), String(year)]),
+                  ),
                 }}
                 value={selectedYear === null ? ALL_YEARS : String(selectedYear)}
                 onValueChange={(value) =>

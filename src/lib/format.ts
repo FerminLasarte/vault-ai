@@ -45,7 +45,10 @@ function capitalize(text: string): string {
 
 // Formats a "YYYY-MM" key as a human month label, e.g. "Julio 2026" (long)
 // or "jul 2026" (short, used for compact chart axes).
-export function formatMonthLabel(monthKey: string, style: "long" | "short" = "long"): string {
+export function formatMonthLabel(
+  monthKey: string,
+  style: "long" | "short" = "long",
+): string {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year, month - 1, 1);
   const formatter = new Intl.DateTimeFormat("es-ES", { month: style, year: "numeric" });

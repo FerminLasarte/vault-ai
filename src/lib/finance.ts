@@ -22,7 +22,9 @@ export function sumByType<T extends Transaction>(
     .reduce((total, transaction) => total + transaction.amount, 0);
 }
 
-export function calculateSummary<T extends Transaction>(transactions: T[]): FinancialSummary {
+export function calculateSummary<T extends Transaction>(
+  transactions: T[],
+): FinancialSummary {
   const income = sumByType(transactions, "income");
   const expenses = sumByType(transactions, "expense");
   return { balance: income - expenses, income, expenses };
@@ -44,7 +46,10 @@ export function filterByMonth<T extends Transaction>(
   return transactions.filter((transaction) => transaction.date.startsWith(monthKey));
 }
 
-export function filterByCurrency<T extends Transaction>(transactions: T[], currency: string): T[] {
+export function filterByCurrency<T extends Transaction>(
+  transactions: T[],
+  currency: string,
+): T[] {
   return transactions.filter((transaction) => transaction.currency === currency);
 }
 
@@ -144,7 +149,11 @@ export function applyTransactionFilters<T extends Transaction>(
     result = filterByDateRange(result, filters.dateFrom ?? null, filters.dateTo ?? null);
   }
   if (filters.minAmount != null || filters.maxAmount != null) {
-    result = filterByAmountRange(result, filters.minAmount ?? null, filters.maxAmount ?? null);
+    result = filterByAmountRange(
+      result,
+      filters.minAmount ?? null,
+      filters.maxAmount ?? null,
+    );
   }
 
   return result;
@@ -170,7 +179,8 @@ export function groupExpensesByCategory(
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
 
-    const key = transaction.category_id != null ? String(transaction.category_id) : "none";
+    const key =
+      transaction.category_id != null ? String(transaction.category_id) : "none";
     const existing = totals.get(key);
     if (existing) {
       existing.total += transaction.amount;
@@ -401,9 +411,7 @@ export type RateLookup = (date: string) => number | null;
 // the price that was actually in force. Movements older than the whole series
 // fall back to its first quote, which is the closest thing to the truth
 // available and beats refusing to value them at all.
-export function buildRateLookup(
-  rates: { date: string; sell: number }[],
-): RateLookup {
+export function buildRateLookup(rates: { date: string; sell: number }[]): RateLookup {
   if (rates.length === 0) return () => null;
 
   // Ascending, so a scan backwards finds the latest quote at or before a date.
@@ -478,6 +486,11 @@ export interface DateRange {
   from: string | null;
   to: string | null;
 }
+
+// Both ends open, i.e. no date filter at all. A shared constant rather than a
+// literal per call site, so an unfiltered range is referentially stable and
+// does not retrigger the memos that depend on it.
+export const EMPTY_DATE_RANGE: DateRange = { from: null, to: null };
 
 // The full calendar year as a date range.
 export function yearRange(year: number): DateRange {

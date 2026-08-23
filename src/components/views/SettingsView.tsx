@@ -174,8 +174,8 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle>Tus datos</CardTitle>
           <CardDescription>
-            Todo vive únicamente en este equipo. Si se pierde el disco, se pierde
-            todo: no hay copia en ningún servidor.
+            Todo vive únicamente en este equipo. Si se pierde el disco, se pierde todo: no
+            hay copia en ningún servidor.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -195,7 +195,12 @@ export function SettingsView() {
           </p>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" disabled={busy} onClick={handleBackup}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={handleBackup}
+            >
               <HardDriveDownload />
               Guardar copia de seguridad
             </Button>
@@ -223,7 +228,9 @@ export function SettingsView() {
             <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
               <p className="text-sm font-medium">
                 {outcome.imported}{" "}
-                {outcome.imported === 1 ? "transacción importada" : "transacciones importadas"}
+                {outcome.imported === 1
+                  ? "transacción importada"
+                  : "transacciones importadas"}
               </p>
               {outcome.duplicates > 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -257,9 +264,9 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle>Cotizaciones</CardTitle>
           <CardDescription>
-            Con el histórico, cada movimiento se valúa a la cotización del día en
-            que ocurrió, en vez de a la de hoy. Sin él, un gasto viejo parece más
-            barato de lo que fue.
+            Con el histórico, cada movimiento se valúa a la cotización del día en que
+            ocurrió, en vez de a la de hoy. Sin él, un gasto viejo parece más barato de lo
+            que fue.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
