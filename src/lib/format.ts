@@ -10,6 +10,16 @@ export function formatCurrency(
   }).format(value);
 }
 
+// A ratio (0.275) as a percentage ("27,5 %"). One decimal, because a financing
+// surcharge is rarely a round number and rounding to whole points would report
+// 27 % for both 27,1 % and 27,9 %.
+export function formatPercent(ratio: number): string {
+  return new Intl.NumberFormat("es-ES", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(ratio);
+}
+
 const dateFormatter = new Intl.DateTimeFormat("es-ES", {
   day: "2-digit",
   month: "short",
@@ -45,7 +55,10 @@ function capitalize(text: string): string {
 
 // Formats a "YYYY-MM" key as a human month label, e.g. "Julio 2026" (long)
 // or "jul 2026" (short, used for compact chart axes).
-export function formatMonthLabel(monthKey: string, style: "long" | "short" = "long"): string {
+export function formatMonthLabel(
+  monthKey: string,
+  style: "long" | "short" = "long",
+): string {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(year, month - 1, 1);
   const formatter = new Intl.DateTimeFormat("es-ES", { month: style, year: "numeric" });

@@ -165,9 +165,7 @@ export function RecurringView() {
                       size="icon-sm"
                       label="Registrar"
                       disabled={isMutating}
-                      onClick={() =>
-                        void confirmRecurring(entry.template.id, entry.date)
-                      }
+                      onClick={() => void confirmRecurring(entry.template.id, entry.date)}
                     >
                       <Check />
                       <span className="sr-only">
@@ -180,9 +178,7 @@ export function RecurringView() {
                       size="icon-sm"
                       label="Descartar"
                       disabled={isMutating}
-                      onClick={() =>
-                        void dismissRecurring(entry.template.id, entry.date)
-                      }
+                      onClick={() => void dismissRecurring(entry.template.id, entry.date)}
                     >
                       <X />
                       <span className="sr-only">

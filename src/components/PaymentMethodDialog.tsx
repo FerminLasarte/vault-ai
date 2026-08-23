@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { PAYMENT_METHOD_TYPE_LABELS, PAYMENT_METHOD_TYPES } from "@/lib/labels";
-import type { NewPaymentMethod, PaymentMethod, PaymentMethodType } from "@/db";
+import type { NewPaymentMethod, PaymentMethod } from "@/db";
 
 const paymentMethodSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),
@@ -124,7 +124,7 @@ export function PaymentMethodDialog({
                 <Select
                   items={PAYMENT_METHOD_TYPE_LABELS}
                   value={field.value}
-                  onValueChange={(value) => field.onChange(value as PaymentMethodType)}
+                  onValueChange={(value) => field.onChange(value)}
                 >
                   <SelectTrigger id="payment-method-type" className="w-full">
                     <SelectValue placeholder="Selecciona un tipo" />
@@ -180,22 +180,16 @@ export function PaymentMethodDialog({
               {...register("initialBalance")}
             />
             <p className="text-xs text-muted-foreground">
-              El saldo que tenía la cuenta antes de empezar a registrar movimientos
-              aquí. Puede ser negativo.
+              El saldo que tenía la cuenta antes de empezar a registrar movimientos aquí.
+              Puede ser negativo.
             </p>
             {errors.initialBalance && (
-              <p className="text-xs text-destructive">
-                {errors.initialBalance.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.initialBalance.message}</p>
             )}
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>

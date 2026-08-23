@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   ChevronLeft,
@@ -30,12 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,17 +44,18 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CurrencyFilter } from "@/components/CurrencyFilter";
 import { CategorySelect } from "@/components/filters/CategorySelect";
-import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { TransactionForm } from "@/components/TransactionForm";
 import { AttachmentsDialog } from "@/components/AttachmentsDialog";
 import { useAppData } from "@/hooks/useAppData";
-import { applyTransactionFilters, filterByTag } from "@/lib/finance";
+import { applyTransactionFilters, EMPTY_DATE_RANGE, filterByTag } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { splitTagNames } from "@/lib/text";
 import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { TransactionWithCategory } from "@/db";
+import type { ViewProps } from "@/lib/menu";
 
 // Rendering thousands of rows at once is what makes the table crawl; a page
 // worth of them is plenty for scanning and keeps the DOM small.
@@ -81,8 +77,7 @@ function parseAmountBound(value: string): number | null {
 // so showing only one of them would misrepresent the movement.
 function TransferAmount({ transaction }: { transaction: TransactionWithCategory }) {
   const destinationAmount = transaction.destination_amount;
-  const destinationCurrency =
-    transaction.destination_currency ?? transaction.currency;
+  const destinationCurrency = transaction.destination_currency ?? transaction.currency;
 
   const sent = formatCurrency(transaction.amount, transaction.currency);
 
@@ -105,7 +100,7 @@ function TransferAmount({ transaction }: { transaction: TransactionWithCategory 
   );
 }
 
-export function TransactionsView() {
+export function TransactionsView({ request }: ViewProps) {
   const {
     transactions,
     categories,
@@ -129,8 +124,9 @@ export function TransactionsView() {
   const [maxAmount, setMaxAmount] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<TransactionWithCategory | null>(null);
-  const [pendingDeletion, setPendingDeletion] =
-    useState<TransactionWithCategory | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<TransactionWithCategory | null>(
+    null,
+  );
   const [attaching, setAttaching] = useState<TransactionWithCategory | null>(null);
 
   const filtered = useMemo(() => {
@@ -146,6 +142,27 @@ export function TransactionsView() {
     return tag === null ? matching : filterByTag(matching, tag);
   }, [transactions, currency, search, tag, categoryId, dateRange, minAmount, maxAmount]);
 
+  // Any change to the filters starts the listing over at the first page.
+  //
+  // Adjusted during render rather than from an effect: an effect runs after the
+  // browser has already painted, so the user would see one frame of page 7 of
+  // the old results before it snapped back. Re-rendering from here happens
+  // before anything is committed, so nothing flickers.
+  const filterSignature = JSON.stringify([
+    currency,
+    search,
+    tag,
+    categoryId,
+    dateRange,
+    minAmount,
+    maxAmount,
+  ]);
+  const [lastFilterSignature, setLastFilterSignature] = useState(filterSignature);
+  if (filterSignature !== lastFilterSignature) {
+    setLastFilterSignature(filterSignature);
+    setPage(0);
+  }
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
   // Narrowing the filters can leave the current page past the end of the
@@ -157,14 +174,18 @@ export function TransactionsView() {
     [filtered, safePage],
   );
 
-  // Any change to the filters starts the listing over at the first page.
-  useEffect(() => {
-    setPage(0);
-  }, [currency, search, tag, categoryId, dateRange, minAmount, maxAmount]);
-
   function openCreateDialog() {
     setEditing(null);
     setIsFormOpen(true);
+  }
+
+  // "Nueva transacción" in the Archivo menu. Handled during render rather than
+  // from an effect because opening a dialog is pure state: an effect would let
+  // the view paint once without it and then pop it in a frame later.
+  const [lastRequestSeq, setLastRequestSeq] = useState(request?.seq ?? 0);
+  if (request !== null && request.seq !== lastRequestSeq) {
+    setLastRequestSeq(request.seq);
+    if (request.action === "new-transaction") openCreateDialog();
   }
 
   function openEditDialog(transaction: TransactionWithCategory) {
@@ -405,9 +426,7 @@ export function TransactionsView() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {TRANSACTION_TYPE_LABELS[transaction.type]}
-                        </TableCell>
+                        <TableCell>{TRANSACTION_TYPE_LABELS[transaction.type]}</TableCell>
                         <TableCell
                           className={cn(
                             "text-right font-medium whitespace-nowrap",
@@ -422,10 +441,7 @@ export function TransactionsView() {
                           ) : (
                             <>
                               {transaction.type === "income" ? "+" : "-"}
-                              {formatCurrency(
-                                transaction.amount,
-                                transaction.currency,
-                              )}
+                              {formatCurrency(transaction.amount, transaction.currency)}
                             </>
                           )}
                         </TableCell>
@@ -546,8 +562,8 @@ export function TransactionsView() {
             <AlertDialogTitle>¿Eliminar esta transacción?</AlertDialogTitle>
             <AlertDialogDescription>
               Se eliminará «{pendingDeletion?.description}» del{" "}
-              {pendingDeletion ? formatDate(pendingDeletion.date) : ""}. Esta acción
-              no se puede deshacer.
+              {pendingDeletion ? formatDate(pendingDeletion.date) : ""}. Esta acción no se
+              puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

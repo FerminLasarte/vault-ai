@@ -42,9 +42,7 @@ export function BudgetsView() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<BudgetWithCategory | null>(null);
-  const [pendingDeletion, setPendingDeletion] = useState<BudgetWithCategory | null>(
-    null,
-  );
+  const [pendingDeletion, setPendingDeletion] = useState<BudgetWithCategory | null>(null);
 
   const expenseCategories = useMemo(
     () => categories.filter((category) => category.type === "expense"),
@@ -122,9 +120,7 @@ export function BudgetsView() {
                         {BUDGET_PERIOD_LABELS[entry.budget.period]}
                       </Badge>
                       <Badge variant="outline">{entry.budget.currency}</Badge>
-                      {entry.isExceeded && (
-                        <Badge variant="destructive">Superado</Badge>
-                      )}
+                      {entry.isExceeded && <Badge variant="destructive">Superado</Badge>}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">

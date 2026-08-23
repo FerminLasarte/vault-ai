@@ -28,6 +28,7 @@ import { todayIsoDate } from "@/lib/format";
 import { matchCategoryId } from "@/lib/categoryRules";
 import { splitTagNames } from "@/lib/text";
 import { cn } from "@/lib/utils";
+import { toSelectValue } from "@/lib/forms";
 
 const transactionFormSchema = z
   .object({
@@ -94,10 +95,7 @@ interface TransactionFormProps {
   defaultCurrency: string;
   // When set, the form edits this transaction instead of creating a new one.
   editing?: TransactionWithCategory | null;
-  onSubmitTransaction: (
-    transaction: NewTransaction,
-    tags: string[],
-  ) => Promise<void>;
+  onSubmitTransaction: (transaction: NewTransaction, tags: string[]) => Promise<void>;
 }
 
 function blankForm(currency: string): TransactionFormInput {
@@ -252,7 +250,7 @@ export function TransactionForm({
       (method) => method.id === selectedPaymentMethodId,
     );
     if (!stillValid) {
-      setValue("paymentMethodId", originAccounts[0]?.id as number, {
+      setValue("paymentMethodId", originAccounts[0]?.id, {
         shouldValidate: false,
       });
     }
@@ -347,10 +345,10 @@ export function TransactionForm({
 
     setSelectedTags([]);
     reset({
-        type: values.type,
+      type: values.type,
       amount: 0,
-        currency: values.currency,
-        paymentMethodId: values.paymentMethodId,
+      currency: values.currency,
+      paymentMethodId: values.paymentMethodId,
       destinationPaymentMethodId: values.destinationPaymentMethodId,
       destinationAmount: null,
       categoryId: values.categoryId,
@@ -374,9 +372,7 @@ export function TransactionForm({
               <Select
                 items={TRANSACTION_TYPE_LABELS}
                 value={field.value}
-                onValueChange={(value) =>
-                  field.onChange(value as TransactionFormValues["type"])
-                }
+                onValueChange={(value) => field.onChange(value)}
               >
                 <SelectTrigger id="transaction-type" className="w-full">
                   <SelectValue placeholder="Selecciona un tipo" />
@@ -385,9 +381,7 @@ export function TransactionForm({
                   <SelectItem value="expense">
                     {TRANSACTION_TYPE_LABELS.expense}
                   </SelectItem>
-                  <SelectItem value="income">
-                    {TRANSACTION_TYPE_LABELS.income}
-                  </SelectItem>
+                  <SelectItem value="income">{TRANSACTION_TYPE_LABELS.income}</SelectItem>
                   <SelectItem value="transfer">
                     {TRANSACTION_TYPE_LABELS.transfer}
                   </SelectItem>
@@ -452,7 +446,7 @@ export function TransactionForm({
               render={({ field }) => (
                 <Select
                   items={categorySelectItems}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => {
                     categoryTouchedRef.current = true;
                     field.onChange(Number(value));
@@ -487,7 +481,7 @@ export function TransactionForm({
             render={({ field }) => (
               <Select
                 items={originSelectItems}
-                value={field.value ? String(field.value) : ""}
+                value={toSelectValue(field.value)}
                 onValueChange={(value) => field.onChange(Number(value))}
                 disabled={originAccounts.length === 0}
               >
@@ -510,9 +504,7 @@ export function TransactionForm({
             </p>
           ) : (
             errors.paymentMethodId && (
-              <p className="text-xs text-destructive">
-                {errors.paymentMethodId.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.paymentMethodId.message}</p>
             )
           )}
         </div>
@@ -526,7 +518,7 @@ export function TransactionForm({
               render={({ field }) => (
                 <Select
                   items={destinationSelectItems}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                   disabled={destinationAccounts.length === 0}
                 >
@@ -565,8 +557,8 @@ export function TransactionForm({
               {...register("destinationAmount")}
             />
             <p className="text-xs text-muted-foreground">
-              Lo que realmente entra en «{destinationAccount.name}». Al registrar
-              ambos importes no hace falta ninguna cotización.
+              Lo que realmente entra en «{destinationAccount.name}». Al registrar ambos
+              importes no hace falta ninguna cotización.
             </p>
             {errors.destinationAmount && (
               <p className="text-xs text-destructive">
@@ -606,9 +598,7 @@ export function TransactionForm({
             {...register("description")}
           />
           {errors.description && (
-            <p className="text-xs text-destructive">
-              {errors.description.message}
-            </p>
+            <p className="text-xs text-destructive">{errors.description.message}</p>
           )}
         </div>
 

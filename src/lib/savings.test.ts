@@ -5,11 +5,7 @@ import type {
   SavingsGoalWithNames,
   Transaction,
 } from "@/db/schema";
-import {
-  calculateSavingsProgress,
-  monthsBetween,
-  netAccountFlow,
-} from "@/lib/savings";
+import { calculateSavingsProgress, monthsBetween, netAccountFlow } from "@/lib/savings";
 
 const TODAY = "2026-08-22";
 
@@ -44,11 +40,7 @@ function makeGoal(overrides: Partial<SavingsGoalWithNames> = {}): SavingsGoalWit
   };
 }
 
-function contribution(
-  amount: number,
-  date: string,
-  goalId = 1,
-): SavingsContribution {
+function contribution(amount: number, date: string, goalId = 1): SavingsContribution {
   return { id: Math.random(), goal_id: goalId, amount, date, note: null };
 }
 
@@ -74,8 +66,20 @@ describe("monthsBetween", () => {
 describe("netAccountFlow", () => {
   it("counts income up and expenses down", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "income", amount: 500, payment_method_id: 1, date: "2026-07-01" }),
-      makeTransaction({ id: 2, type: "expense", amount: 200, payment_method_id: 1, date: "2026-07-02" }),
+      makeTransaction({
+        id: 1,
+        type: "income",
+        amount: 500,
+        payment_method_id: 1,
+        date: "2026-07-01",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 200,
+        payment_method_id: 1,
+        date: "2026-07-02",
+      }),
     ];
     expect(netAccountFlow(transactions, 1, "2026-06-01", TODAY)).toBe(300);
   });
@@ -112,7 +116,13 @@ describe("netAccountFlow", () => {
 
   it("ignores anything outside the window", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "income", amount: 500, payment_method_id: 1, date: "2025-01-01" }),
+      makeTransaction({
+        id: 1,
+        type: "income",
+        amount: 500,
+        payment_method_id: 1,
+        date: "2025-01-01",
+      }),
     ];
     expect(netAccountFlow(transactions, 1, "2026-06-01", TODAY)).toBe(0);
   });
@@ -124,7 +134,10 @@ describe("calculateSavingsProgress", () => {
   it("adds up contributions for a contribution-tracked goal", () => {
     const [progress] = calculateSavingsProgress(
       [makeGoal()],
-      { ...empty, contributions: [contribution(300, "2026-07-01"), contribution(200, "2026-08-01")] },
+      {
+        ...empty,
+        contributions: [contribution(300, "2026-07-01"), contribution(200, "2026-08-01")],
+      },
       TODAY,
     );
     expect(progress.current).toBe(500);
@@ -139,7 +152,13 @@ describe("calculateSavingsProgress", () => {
       {
         accounts,
         transactions: [
-          makeTransaction({ id: 1, type: "income", amount: 750, payment_method_id: 1, date: "2026-07-01" }),
+          makeTransaction({
+            id: 1,
+            type: "income",
+            amount: 750,
+            payment_method_id: 1,
+            date: "2026-07-01",
+          }),
         ],
         contributions: [],
       },
@@ -194,7 +213,13 @@ describe("calculateSavingsProgress", () => {
       {
         accounts,
         transactions: [
-          makeTransaction({ id: 1, type: "expense", amount: 900, payment_method_id: 1, date: "2026-07-01" }),
+          makeTransaction({
+            id: 1,
+            type: "expense",
+            amount: 900,
+            payment_method_id: 1,
+            date: "2026-07-01",
+          }),
         ],
         contributions: [],
       },

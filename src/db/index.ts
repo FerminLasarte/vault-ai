@@ -11,6 +11,8 @@ import type {
   PaymentMethodType,
   NewTransaction,
   InstallmentPlanWithNames,
+  LoanDirection,
+  LoanWithNames,
   RecurrenceFrequencyValue,
   SavingsContribution,
   SavingsGoalWithNames,
@@ -21,24 +23,51 @@ import type {
   TransactionWithCategory,
 } from "./schema";
 
+// Deliberately still "vault-ai.db" after the app was renamed to Vault. The file
+// name is what the plugin opens; changing it would create a second, empty
+// database and leave the real one sitting untouched beside it. It is invisible
+// to the user, and renaming it would need a migration that moves real financial
+// data for no benefit.
 const DATABASE_URL = "sqlite:vault-ai.db";
 
-let dbPromise: Promise<Database> | null = null;
+export interface QueryResult {
+  rowsAffected: number;
+  lastInsertId?: number;
+}
+
+// The surface of the connection this module actually uses. Naming it means the
+// query functions below can run against anything that honours it — in practice
+// the plugin in the app, and an in-memory database with the same schema under
+// test (see ./testing/database).
+export interface SqlConnection {
+  select<T>(query: string, values?: unknown[]): Promise<T>;
+  execute(query: string, values?: unknown[]): Promise<QueryResult>;
+}
+
+let dbPromise: Promise<SqlConnection> | null = null;
 
 // Returns a cached connection, opening it (once) on first call. Opening the
 // connection is what triggers the Rust-side migrations (see src-tauri/src/lib.rs),
 // which create the schema and seed the default data — so by the time
 // this promise resolves, the database is fully ready.
-export function getDb(): Promise<Database> {
+export function getDb(): Promise<SqlConnection> {
   if (!dbPromise) {
     dbPromise = Database.load(DATABASE_URL);
   }
   return dbPromise;
 }
 
+// Substitutes the connection, for tests only. Without this the only way to
+// exercise these queries would be to mock the module wholesale, which asserts
+// that some SQL string was passed somewhere and proves nothing about whether
+// the SQL is correct. Pass null to restore the real connection.
+export function setDatabaseForTesting(connection: SqlConnection | null): void {
+  dbPromise = connection === null ? null : Promise.resolve(connection);
+}
+
 // Ensures the connection (and thus the Rust migrations) has run. Safe to
 // call from multiple components on mount; they all share the same promise.
-export function initDatabase(): Promise<Database> {
+export function initDatabase(): Promise<SqlConnection> {
   return getDb();
 }
 
@@ -150,9 +179,7 @@ export async function listTransactions(): Promise<Transaction[]> {
 
 // Joins the category and payment method names in SQL so the UI never has to
 // display a raw id or look them up client-side.
-export async function listTransactionsWithCategory(): Promise<
-  TransactionWithCategory[]
-> {
+export async function listTransactionsWithCategory(): Promise<TransactionWithCategory[]> {
   const db = await getDb();
   return db.select<TransactionWithCategory[]>(
     `SELECT t.*,
@@ -177,9 +204,7 @@ export async function listTransactionsWithCategory(): Promise<
 }
 
 // Returns the new row's id so the caller can attach tags to it.
-export async function insertTransaction(
-  transaction: NewTransaction,
-): Promise<number> {
+export async function insertTransaction(transaction: NewTransaction): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
     `INSERT INTO transactions
@@ -240,9 +265,7 @@ export async function deleteTransaction(id: number): Promise<void> {
 }
 
 // Metadata only; `getAttachmentContent` fetches the bytes when they are needed.
-export async function listAttachments(
-  transactionId: number,
-): Promise<AttachmentMeta[]> {
+export async function listAttachments(transactionId: number): Promise<AttachmentMeta[]> {
   const db = await getDb();
   return db.select<AttachmentMeta[]>(
     `SELECT id, transaction_id, file_name, mime_type, byte_size, created_at
@@ -341,10 +364,7 @@ export async function insertSavingsGoal(goal: NewSavingsGoal): Promise<void> {
   );
 }
 
-export async function updateSavingsGoal(
-  id: number,
-  goal: NewSavingsGoal,
-): Promise<void> {
+export async function updateSavingsGoal(id: number, goal: NewSavingsGoal): Promise<void> {
   const db = await getDb();
   await db.execute(
     `UPDATE savings_goals
@@ -408,17 +428,17 @@ export interface NewInstallmentPlan {
   categoryId: number | null;
   paymentMethodId: number | null;
   firstDueDate: string;
+  // Optional: what the purchase would have cost paid outright.
+  cashPrice: number | null;
 }
 
-export async function insertInstallmentPlan(
-  plan: NewInstallmentPlan,
-): Promise<void> {
+export async function insertInstallmentPlan(plan: NewInstallmentPlan): Promise<void> {
   const db = await getDb();
   await db.execute(
     `INSERT INTO installment_plans
        (description, total_amount, installment_count, currency, category_id,
-        payment_method_id, first_due_date, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        payment_method_id, first_due_date, cash_price, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       plan.description,
       plan.totalAmount,
@@ -427,6 +447,7 @@ export async function insertInstallmentPlan(
       plan.categoryId,
       plan.paymentMethodId,
       plan.firstDueDate,
+      plan.cashPrice,
       new Date().toISOString(),
     ],
   );
@@ -441,8 +462,8 @@ export async function updateInstallmentPlan(
     `UPDATE installment_plans
      SET description = $1, total_amount = $2, installment_count = $3,
          currency = $4, category_id = $5, payment_method_id = $6,
-         first_due_date = $7
-     WHERE id = $8`,
+         first_due_date = $7, cash_price = $8
+     WHERE id = $9`,
     [
       plan.description,
       plan.totalAmount,
@@ -451,6 +472,7 @@ export async function updateInstallmentPlan(
       plan.categoryId,
       plan.paymentMethodId,
       plan.firstDueDate,
+      plan.cashPrice,
       id,
     ],
   );
@@ -472,6 +494,100 @@ export async function advanceInstallmentPlan(
     `UPDATE installment_plans
      SET confirmed_count = MIN($1, installment_count)
      WHERE id = $2`,
+    [confirmedCount, id],
+  );
+}
+
+export async function listLoans(): Promise<LoanWithNames[]> {
+  const db = await getDb();
+  return db.select<LoanWithNames[]>(
+    `SELECT l.*,
+            c.name AS category_name,
+            c.icon AS category_icon,
+            p.name AS payment_method_name
+     FROM loans l
+     LEFT JOIN categories c ON c.id = l.category_id
+     LEFT JOIN payment_methods p ON p.id = l.payment_method_id
+     ORDER BY l.first_due_date DESC, l.id DESC`,
+  );
+}
+
+export interface NewLoan {
+  direction: LoanDirection;
+  counterparty: string;
+  description: string;
+  principal: number;
+  currency: string;
+  annualRate: number;
+  installmentCount: number;
+  categoryId: number | null;
+  paymentMethodId: number | null;
+  firstDueDate: string;
+}
+
+export async function insertLoan(loan: NewLoan): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO loans
+       (direction, counterparty, description, principal, currency, annual_rate,
+        installment_count, category_id, payment_method_id, first_due_date,
+        created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [
+      loan.direction,
+      loan.counterparty,
+      loan.description,
+      loan.principal,
+      loan.currency,
+      loan.annualRate,
+      loan.installmentCount,
+      loan.categoryId,
+      loan.paymentMethodId,
+      loan.firstDueDate,
+      new Date().toISOString(),
+    ],
+  );
+}
+
+export async function updateLoan(id: number, loan: NewLoan): Promise<void> {
+  const db = await getDb();
+  // `confirmed_count` is deliberately left alone: editing the terms of a loan
+  // must not undo or invent payments that were already recorded.
+  await db.execute(
+    `UPDATE loans
+     SET direction = $1, counterparty = $2, description = $3, principal = $4,
+         currency = $5, annual_rate = $6, installment_count = $7,
+         category_id = $8, payment_method_id = $9, first_due_date = $10
+     WHERE id = $11`,
+    [
+      loan.direction,
+      loan.counterparty,
+      loan.description,
+      loan.principal,
+      loan.currency,
+      loan.annualRate,
+      loan.installmentCount,
+      loan.categoryId,
+      loan.paymentMethodId,
+      loan.firstDueDate,
+      id,
+    ],
+  );
+}
+
+export async function deleteLoan(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM loans WHERE id = $1", [id]);
+}
+
+// Payments are confirmed strictly in order, so the count is all that needs
+// storing. Guarded against running past the end of the schedule.
+export async function advanceLoan(id: number, confirmedCount: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE loans
+     SET confirmed_count = $1
+     WHERE id = $2 AND $1 <= installment_count AND $1 >= 0`,
     [confirmedCount, id],
   );
 }
@@ -561,10 +677,7 @@ export async function deleteRecurringTransaction(id: number): Promise<void> {
 // Records how far a series has been dealt with. Called both when an occurrence
 // is accepted into the ledger and when it is dismissed, since either way the
 // user has decided about it and it must stop being proposed.
-export async function markRecurringConfirmed(
-  id: number,
-  date: string,
-): Promise<void> {
+export async function markRecurringConfirmed(id: number, date: string): Promise<void> {
   const db = await getDb();
   await db.execute(
     "UPDATE recurring_transactions SET last_confirmed_date = $1 WHERE id = $2",
@@ -680,10 +793,10 @@ export interface NewCategoryRule {
 
 export async function insertCategoryRule(rule: NewCategoryRule): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "INSERT INTO category_rules (pattern, category_id) VALUES ($1, $2)",
-    [rule.pattern, rule.categoryId],
-  );
+  await db.execute("INSERT INTO category_rules (pattern, category_id) VALUES ($1, $2)", [
+    rule.pattern,
+    rule.categoryId,
+  ]);
 }
 
 export async function updateCategoryRule(
@@ -726,10 +839,15 @@ export async function checkpointDatabase(): Promise<void> {
 
 // Returns the most recent cached quote, or null when none has ever been
 // stored — which is only the case before the first successful fetch.
-export async function getLatestExchangeRate(): Promise<ExchangeRate | null> {
+export async function getLatestExchangeRate(
+  rateType: string,
+): Promise<ExchangeRate | null> {
   const db = await getDb();
   const rows = await db.select<ExchangeRate[]>(
-    "SELECT * FROM exchange_rates ORDER BY date DESC LIMIT 1",
+    `SELECT * FROM exchange_rates
+     WHERE rate_type = $1
+     ORDER BY date DESC LIMIT 1`,
+    [rateType],
   );
   return rows[0] ?? null;
 }
@@ -737,6 +855,7 @@ export async function getLatestExchangeRate(): Promise<ExchangeRate | null> {
 // Keys the app stores about itself. Kept as constants so a typo cannot quietly
 // read a setting that was never written.
 export const LAST_BACKUP_AT = "last_backup_at";
+export const EXCHANGE_RATE_TYPE = "exchange_rate_type";
 
 export async function getSetting(key: string): Promise<string | null> {
   const db = await getDb();
@@ -756,13 +875,16 @@ export async function setSetting(key: string, value: string): Promise<void> {
   );
 }
 
-export async function listExchangeRates(): Promise<ExchangeRate[]> {
+export async function listExchangeRates(rateType: string): Promise<ExchangeRate[]> {
   const db = await getDb();
-  return db.select<ExchangeRate[]>("SELECT * FROM exchange_rates ORDER BY date");
+  return db.select<ExchangeRate[]>(
+    "SELECT * FROM exchange_rates WHERE rate_type = $1 ORDER BY date",
+    [rateType],
+  );
 }
 
 // Bound parameters per row, used to size the batches below.
-const EXCHANGE_RATE_COLUMNS = 5;
+const EXCHANGE_RATE_COLUMNS = 6;
 // SQLite caps how many parameters a single statement may bind. Staying well
 // under the limit keeps this working regardless of how the library was built.
 const MAX_BOUND_PARAMETERS = 900;
@@ -784,12 +906,13 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
     const placeholders = batch
       .map((_, index) => {
         const base = index * EXCHANGE_RATE_COLUMNS;
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
       })
       .join(", ");
 
     const values = batch.flatMap((rate) => [
       rate.date,
+      rate.rate_type,
       rate.buy,
       rate.sell,
       rate.source,
@@ -797,9 +920,9 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
     ]);
 
     await db.execute(
-      `INSERT INTO exchange_rates (date, buy, sell, source, fetched_at)
+      `INSERT INTO exchange_rates (date, rate_type, buy, sell, source, fetched_at)
        VALUES ${placeholders}
-       ON CONFLICT(date) DO UPDATE SET
+       ON CONFLICT(date, rate_type) DO UPDATE SET
          buy = excluded.buy,
          sell = excluded.sell,
          source = excluded.source,
@@ -819,14 +942,14 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
 export async function upsertExchangeRate(rate: ExchangeRate): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `INSERT INTO exchange_rates (date, buy, sell, source, fetched_at)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT(date) DO UPDATE SET
+    `INSERT INTO exchange_rates (date, rate_type, buy, sell, source, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT(date, rate_type) DO UPDATE SET
        buy = excluded.buy,
        sell = excluded.sell,
        source = excluded.source,
        fetched_at = excluded.fetched_at`,
-    [rate.date, rate.buy, rate.sell, rate.source, rate.fetched_at],
+    [rate.date, rate.rate_type, rate.buy, rate.sell, rate.source, rate.fetched_at],
   );
 }
 

@@ -10,15 +10,18 @@ import { toast } from "sonner";
 import {
   deleteAttachment,
   advanceInstallmentPlan,
+  advanceLoan,
   deleteBudget,
   deleteCategory,
   deleteInstallmentPlan,
+  deleteLoan,
   deleteSavingsContribution,
   deleteSavingsGoal,
   deleteRecurringTransaction,
   deleteCategoryRule,
   deletePaymentMethod,
   deleteTransaction,
+  EXCHANGE_RATE_TYPE,
   getLatestExchangeRate,
   getSetting,
   LAST_BACKUP_AT,
@@ -27,6 +30,7 @@ import {
   insertBudget,
   insertCategory,
   insertInstallmentPlan,
+  insertLoan,
   insertSavingsContribution,
   insertSavingsGoal,
   insertRecurringTransaction,
@@ -37,6 +41,7 @@ import {
   listBudgets,
   listCategories,
   listInstallmentPlans,
+  listLoans,
   listSavingsContributions,
   listSavingsGoals,
   listExchangeRates,
@@ -51,6 +56,7 @@ import {
   markRecurringConfirmed,
   updateBudget,
   updateInstallmentPlan,
+  updateLoan,
   updateSavingsGoal,
   updateCategoryRule,
   updateRecurringTransaction,
@@ -64,8 +70,10 @@ import {
   type ExchangeRate,
   type NewAttachment,
   type InstallmentPlanWithNames,
+  type LoanWithNames,
   type NewBudget,
   type NewInstallmentPlan,
+  type NewLoan,
   type NewSavingsGoal,
   type SavingsContribution,
   type SavingsGoalWithNames,
@@ -80,10 +88,13 @@ import {
   type TransactionWithCategory,
 } from "@/db";
 import {
-  fetchMepRate,
-  fetchMepRateHistory,
+  DEFAULT_RATE_TYPE,
+  fetchRate,
+  fetchRateHistory,
+  isRateType,
   MANUAL_RATE_SOURCE,
 } from "@/lib/exchangeRate";
+import type { RateType } from "@/lib/exchangeRate";
 import { todayIsoDate } from "@/lib/format";
 
 export interface AppData {
@@ -95,9 +106,14 @@ export interface AppData {
   budgets: BudgetWithCategory[];
   recurring: RecurringTransactionWithNames[];
   installmentPlans: InstallmentPlanWithNames[];
+  loans: LoanWithNames[];
   savingsGoals: SavingsGoalWithNames[];
   savingsContributions: SavingsContribution[];
   // Latest known MEP quote, or null before the very first successful fetch.
+  // Which dollar the app values foreign movements at. Persisted, because a
+  // conversion that silently changes meaning between launches is worse than no
+  // conversion at all.
+  rateType: RateType;
   exchangeRate: ExchangeRate | null;
   // Every cached quote, used to value each movement at the rate of its own
   // date instead of restating the past at today's.
@@ -129,6 +145,19 @@ export interface AppData {
     note: string | null,
   ) => Promise<void>;
   removeSavingsContribution: (id: number) => Promise<void>;
+
+  addLoan: (loan: NewLoan) => Promise<void>;
+  editLoan: (id: number, loan: NewLoan) => Promise<void>;
+  removeLoan: (id: number) => Promise<void>;
+  // Records the payment as a real movement and advances the loan by one, in
+  // that order, so a failure never leaves a loan claiming a payment that was
+  // never written.
+  confirmLoanPayment: (
+    id: number,
+    index: number,
+    date: string,
+    amount: number,
+  ) => Promise<void>;
 
   addInstallmentPlan: (plan: NewInstallmentPlan) => Promise<void>;
   editInstallmentPlan: (id: number, plan: NewInstallmentPlan) => Promise<void>;
@@ -172,6 +201,7 @@ export interface AppData {
   editPaymentMethod: (id: number, method: NewPaymentMethod) => Promise<void>;
   removePaymentMethod: (id: number) => Promise<void>;
 
+  setRateType: (type: RateType) => Promise<void>;
   refreshExchangeRate: (options?: { silent?: boolean }) => Promise<void>;
   saveManualExchangeRate: (buy: number, sell: number) => Promise<void>;
   // Downloads the whole historical series. Explicit rather than automatic:
@@ -180,7 +210,6 @@ export interface AppData {
   // Called after a backup actually lands on disk, so the reminder measures
   // real copies rather than attempts.
   recordBackup: () => Promise<void>;
-
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -194,13 +223,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [budgets, setBudgets] = useState<BudgetWithCategory[]>([]);
   const [recurring, setRecurring] = useState<RecurringTransactionWithNames[]>([]);
-  const [installmentPlans, setInstallmentPlans] = useState<
-    InstallmentPlanWithNames[]
-  >([]);
+  const [installmentPlans, setInstallmentPlans] = useState<InstallmentPlanWithNames[]>(
+    [],
+  );
+  const [loans, setLoans] = useState<LoanWithNames[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalWithNames[]>([]);
-  const [savingsContributions, setSavingsContributions] = useState<
-    SavingsContribution[]
-  >([]);
+  const [savingsContributions, setSavingsContributions] = useState<SavingsContribution[]>(
+    [],
+  );
+  const [rateType, setRateTypeState] = useState<RateType>(DEFAULT_RATE_TYPE);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
@@ -210,6 +241,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     await initDatabase();
+
+    // Which series to load has to be known before the queries go out, so this
+    // one setting is read on its own rather than inside the batch below.
+    const storedRateType = await getSetting(EXCHANGE_RATE_TYPE);
+    const activeRateType = isRateType(storedRateType)
+      ? storedRateType
+      : DEFAULT_RATE_TYPE;
+
     const [
       nextTransactions,
       nextCategories,
@@ -219,6 +258,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       nextBudgets,
       nextRecurring,
       nextPlans,
+      nextLoans,
       nextGoals,
       nextContributions,
       cachedRate,
@@ -233,10 +273,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       listBudgets(),
       listRecurringTransactions(),
       listInstallmentPlans(),
+      listLoans(),
       listSavingsGoals(),
       listSavingsContributions(),
-      getLatestExchangeRate(),
-      listExchangeRates(),
+      getLatestExchangeRate(activeRateType),
+      listExchangeRates(activeRateType),
       getSetting(LAST_BACKUP_AT),
     ]);
     setTransactions(nextTransactions);
@@ -247,8 +288,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setBudgets(nextBudgets);
     setRecurring(nextRecurring);
     setInstallmentPlans(nextPlans);
+    setLoans(nextLoans);
     setSavingsGoals(nextGoals);
     setSavingsContributions(nextContributions);
+    setRateTypeState(activeRateType);
     setExchangeRate(cachedRate);
     setExchangeRateHistory(cachedHistory);
     setLastBackupAt(storedLastBackup);
@@ -261,7 +304,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async ({ silent = false }: { silent?: boolean } = {}) => {
       setIsRefreshingRate(true);
       try {
-        const rate = await fetchMepRate();
+        const rate = await fetchRate(rateType);
         await upsertExchangeRate(rate);
         setExchangeRate(rate);
         if (!silent) toast.success("Cotización actualizada");
@@ -274,8 +317,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setIsRefreshingRate(false);
       }
     },
-    [],
+    [rateType],
   );
+
+  // Switching rates keeps whatever was already downloaded for the new one and
+  // shows it immediately, then goes to the network. Nothing is deleted: the old
+  // series stays cached, so changing back is instant rather than another
+  // multi-thousand-record download.
+  const setRateType = useCallback(async (type: RateType) => {
+    await setSetting(EXCHANGE_RATE_TYPE, type);
+    setRateTypeState(type);
+
+    const [cachedRate, cachedHistory] = await Promise.all([
+      getLatestExchangeRate(type),
+      listExchangeRates(type),
+    ]);
+    setExchangeRate(cachedRate);
+    setExchangeRateHistory(cachedHistory);
+
+    try {
+      const rate = await fetchRate(type);
+      await upsertExchangeRate(rate);
+      setExchangeRate(rate);
+    } catch (error) {
+      // Offline is normal for a local-first app; the cached quote above stands.
+      console.error("Failed to fetch the newly selected rate:", error);
+    }
+  }, []);
 
   const recordBackup = useCallback(async () => {
     const takenAt = new Date().toISOString();
@@ -286,9 +354,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const backfillExchangeRates = useCallback(async () => {
     setIsRefreshingRate(true);
     try {
-      const history = await fetchMepRateHistory();
+      const history = await fetchRateHistory(rateType);
       const written = await upsertExchangeRates(history);
-      setExchangeRateHistory(await listExchangeRates());
+      setExchangeRateHistory(await listExchangeRates(rateType));
       toast.success(`${written} cotizaciones guardadas`);
       return written;
     } catch (error) {
@@ -298,30 +366,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsRefreshingRate(false);
     }
-  }, []);
+  }, [rateType]);
 
   // A manual correction is stored under today's date, overwriting whatever was
   // fetched for today, and is marked as such so the UI can say so.
-  const saveManualExchangeRate = useCallback(async (buy: number, sell: number) => {
-    const rate: ExchangeRate = {
-      date: todayIsoDate(),
-      buy,
-      sell,
-      source: MANUAL_RATE_SOURCE,
-      fetched_at: new Date().toISOString(),
-    };
-    try {
-      await upsertExchangeRate(rate);
-      setExchangeRate(rate);
-      toast.success("Cotización guardada");
-    } catch (error) {
-      console.error("Failed to save the manual exchange rate:", error);
-      toast.error("No se pudo guardar la cotización");
-      throw error;
-    }
-  }, []);
+  const saveManualExchangeRate = useCallback(
+    async (buy: number, sell: number) => {
+      const rate: ExchangeRate = {
+        date: todayIsoDate(),
+        rate_type: rateType,
+        buy,
+        sell,
+        source: MANUAL_RATE_SOURCE,
+        fetched_at: new Date().toISOString(),
+      };
+      try {
+        await upsertExchangeRate(rate);
+        setExchangeRate(rate);
+        toast.success("Cotización guardada");
+      } catch (error) {
+        console.error("Failed to save the manual exchange rate:", error);
+        toast.error("No se pudo guardar la cotización");
+        throw error;
+      }
+    },
+    [rateType],
+  );
 
   useEffect(() => {
+    // Loading the database on mount is what an effect is for. The rule fires
+    // because `refresh` eventually sets state, but it does so after an await:
+    // this reads an external system, it does not derive state from props.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
       .catch((error) => {
         console.error("Failed to load application data:", error);
@@ -337,13 +413,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // slow read overwrite the fresher figure the fetch just stored.
   useEffect(() => {
     if (isLoading) return;
+    // Same reason as above: a network fetch whose result arrives long after
+    // this effect has returned.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshExchangeRate({ silent: true });
   }, [isLoading, refreshExchangeRate]);
 
   // Every mutation reloads the whole dataset, so a change made in one view is
   // immediately reflected in the statistics and in every other view.
   const runMutation = useCallback(
-    async (mutation: () => Promise<void>, successMessage: string, errorMessage: string) => {
+    async (
+      mutation: () => Promise<void>,
+      successMessage: string,
+      errorMessage: string,
+    ) => {
       setIsMutating(true);
       try {
         await mutation();
@@ -370,8 +453,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       budgets,
       recurring,
       installmentPlans,
+      loans,
       savingsGoals,
       savingsContributions,
+      rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
@@ -379,6 +464,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       isMutating,
       isRefreshingRate,
 
+      setRateType,
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,
@@ -444,6 +530,50 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           () => deleteSavingsContribution(id),
           "Aporte eliminado",
           "No se pudo eliminar el aporte",
+        ),
+
+      addLoan: (loan) =>
+        runMutation(
+          () => insertLoan(loan),
+          "Préstamo creado",
+          "No se pudo crear el préstamo",
+        ),
+      editLoan: (id, loan) =>
+        runMutation(
+          () => updateLoan(id, loan),
+          "Préstamo actualizado",
+          "No se pudo actualizar el préstamo",
+        ),
+      removeLoan: (id) =>
+        runMutation(
+          () => deleteLoan(id),
+          "Préstamo eliminado",
+          "No se pudo eliminar el préstamo",
+        ),
+      confirmLoanPayment: (id, index, date, amount) =>
+        runMutation(
+          async () => {
+            const loan = loans.find((entry) => entry.id === id);
+            if (!loan) return;
+
+            // A payment on money I owe leaves my pocket; a payment on money
+            // owed to me arrives in it. Recording both as expenses would make
+            // being repaid look like a cost.
+            await insertTransaction({
+              amount,
+              type: loan.direction === "borrowed" ? "expense" : "income",
+              currency: loan.currency,
+              categoryId: loan.category_id,
+              paymentMethodId: loan.payment_method_id,
+              destinationPaymentMethodId: null,
+              destinationAmount: null,
+              description: `${loan.description} (${index + 1}/${loan.installment_count})`,
+              date,
+            });
+            await advanceLoan(id, index + 1);
+          },
+          "Cuota registrada",
+          "No se pudo registrar la cuota",
         ),
 
       addInstallmentPlan: (plan) =>
@@ -622,7 +752,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           "Cuenta eliminada",
           "No se pudo eliminar la cuenta",
         ),
-
     }),
     [
       transactions,
@@ -633,14 +762,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       budgets,
       recurring,
       installmentPlans,
+      loans,
       savingsGoals,
       savingsContributions,
+      rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
       isLoading,
       isMutating,
       isRefreshingRate,
+      setRateType,
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,

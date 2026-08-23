@@ -330,11 +330,15 @@ describe("filterByDateRange", () => {
   });
 
   it("treats a null lower bound as unbounded", () => {
-    expect(filterByDateRange(transactions, null, "2026-02-01").map((t) => t.id)).toEqual([1]);
+    expect(filterByDateRange(transactions, null, "2026-02-01").map((t) => t.id)).toEqual([
+      1,
+    ]);
   });
 
   it("treats a null upper bound as unbounded", () => {
-    expect(filterByDateRange(transactions, "2026-02-01", null).map((t) => t.id)).toEqual([2, 3]);
+    expect(filterByDateRange(transactions, "2026-02-01", null).map((t) => t.id)).toEqual([
+      2, 3,
+    ]);
   });
 
   it("returns everything when both bounds are null", () => {
@@ -738,9 +742,7 @@ describe("filterByTag", () => {
 });
 
 describe("calculateBudgetProgress", () => {
-  function makeBudget(
-    overrides: Partial<BudgetWithCategory> = {},
-  ): BudgetWithCategory {
+  function makeBudget(overrides: Partial<BudgetWithCategory> = {}): BudgetWithCategory {
     return {
       id: 1,
       category_id: 3,
@@ -758,8 +760,20 @@ describe("calculateBudgetProgress", () => {
 
   it("adds up the expenses of the current month", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 300, category_id: 3, date: "2026-08-02" }),
-      makeTransaction({ id: 2, type: "expense", amount: 200, category_id: 3, date: "2026-08-20" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 300,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 200,
+        category_id: 3,
+        date: "2026-08-20",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.spent).toBe(500);
@@ -770,7 +784,13 @@ describe("calculateBudgetProgress", () => {
 
   it("ignores expenses from another month", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 900, category_id: 3, date: "2026-07-31" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 900,
+        category_id: 3,
+        date: "2026-07-31",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.spent).toBe(0);
@@ -778,9 +798,27 @@ describe("calculateBudgetProgress", () => {
 
   it("counts the whole year for an annual budget", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 400, category_id: 3, date: "2026-01-10" }),
-      makeTransaction({ id: 2, type: "expense", amount: 400, category_id: 3, date: "2026-08-10" }),
-      makeTransaction({ id: 3, type: "expense", amount: 400, category_id: 3, date: "2025-08-10" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 400,
+        category_id: 3,
+        date: "2026-01-10",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 400,
+        category_id: 3,
+        date: "2026-08-10",
+      }),
+      makeTransaction({
+        id: 3,
+        type: "expense",
+        amount: 400,
+        category_id: 3,
+        date: "2025-08-10",
+      }),
     ];
     const [progress] = calculateBudgetProgress(
       [makeBudget({ period: "annual", amount: 5000 })],
@@ -792,8 +830,21 @@ describe("calculateBudgetProgress", () => {
 
   it("ignores another category and another currency", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 500, category_id: 4, date: "2026-08-02" }),
-      makeTransaction({ id: 2, type: "expense", amount: 500, category_id: 3, currency: "USD", date: "2026-08-02" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 500,
+        category_id: 4,
+        date: "2026-08-02",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 500,
+        category_id: 3,
+        currency: "USD",
+        date: "2026-08-02",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.spent).toBe(0);
@@ -801,8 +852,20 @@ describe("calculateBudgetProgress", () => {
 
   it("does not let income refund the budget", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 600, category_id: 3, date: "2026-08-02" }),
-      makeTransaction({ id: 2, type: "income", amount: 600, category_id: 3, date: "2026-08-03" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 600,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "income",
+        amount: 600,
+        category_id: 3,
+        date: "2026-08-03",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.spent).toBe(600);
@@ -810,7 +873,13 @@ describe("calculateBudgetProgress", () => {
 
   it("ignores transfers entirely", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "transfer", amount: 5000, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({
+        id: 1,
+        type: "transfer",
+        amount: 5000,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.spent).toBe(0);
@@ -818,7 +887,13 @@ describe("calculateBudgetProgress", () => {
 
   it("reports a ratio above one when the cap is passed", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 1800, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 1800,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.ratio).toBeCloseTo(1.8);
@@ -828,7 +903,13 @@ describe("calculateBudgetProgress", () => {
 
   it("treats spending exactly the cap as not exceeded", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 1000, category_id: 3, date: "2026-08-02" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 1000,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
     ];
     const [progress] = calculateBudgetProgress([makeBudget()], transactions, reference);
     expect(progress.isExceeded).toBe(false);
@@ -846,8 +927,20 @@ describe("calculateBudgetProgress", () => {
 
   it("picks out only the exceeded ones", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "expense", amount: 1800, category_id: 3, date: "2026-08-02" }),
-      makeTransaction({ id: 2, type: "expense", amount: 100, category_id: 4, date: "2026-08-02" }),
+      makeTransaction({
+        id: 1,
+        type: "expense",
+        amount: 1800,
+        category_id: 3,
+        date: "2026-08-02",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 100,
+        category_id: 4,
+        date: "2026-08-02",
+      }),
     ];
     const progress = calculateBudgetProgress(
       [makeBudget(), makeBudget({ id: 2, category_id: 4 })],
@@ -911,7 +1004,9 @@ describe("convertAtDate", () => {
   });
 
   it("returns null without any history", () => {
-    expect(convertAtDate(100, "ARS", "USD", "2026-08-10", buildRateLookup([]))).toBeNull();
+    expect(
+      convertAtDate(100, "ARS", "USD", "2026-08-10", buildRateLookup([])),
+    ).toBeNull();
   });
 });
 
@@ -923,8 +1018,20 @@ describe("summaryInCurrency", () => {
 
   it("values each movement at its own date", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "income", amount: 8000, currency: "ARS", date: "2024-06-01" }),
-      makeTransaction({ id: 2, type: "expense", amount: 8000, currency: "ARS", date: "2026-08-10" }),
+      makeTransaction({
+        id: 1,
+        type: "income",
+        amount: 8000,
+        currency: "ARS",
+        date: "2024-06-01",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "expense",
+        amount: 8000,
+        currency: "ARS",
+        date: "2026-08-10",
+      }),
     ];
     // 8000 pesos was 10 dollars then and 5 dollars now.
     expect(summaryInCurrency(transactions, "USD", rateAt)).toEqual({
@@ -936,15 +1043,33 @@ describe("summaryInCurrency", () => {
 
   it("mixes currencies without double converting", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "income", amount: 1600, currency: "ARS", date: "2026-08-10" }),
-      makeTransaction({ id: 2, type: "income", amount: 5, currency: "USD", date: "2026-08-10" }),
+      makeTransaction({
+        id: 1,
+        type: "income",
+        amount: 1600,
+        currency: "ARS",
+        date: "2026-08-10",
+      }),
+      makeTransaction({
+        id: 2,
+        type: "income",
+        amount: 5,
+        currency: "USD",
+        date: "2026-08-10",
+      }),
     ];
     expect(summaryInCurrency(transactions, "USD", rateAt)?.income).toBe(6);
   });
 
   it("leaves transfers out, as the other summaries do", () => {
     const transactions = [
-      makeTransaction({ id: 1, type: "transfer", amount: 100000, currency: "ARS", date: "2026-08-10" }),
+      makeTransaction({
+        id: 1,
+        type: "transfer",
+        amount: 100000,
+        currency: "ARS",
+        date: "2026-08-10",
+      }),
     ];
     expect(summaryInCurrency(transactions, "USD", rateAt)).toEqual({
       income: 0,

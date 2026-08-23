@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CategorySelect } from "@/components/filters/CategorySelect";
-import { DateRangePicker, EMPTY_DATE_RANGE } from "@/components/DateRangePicker";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { SummaryCards } from "@/components/SummaryCards";
 import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
@@ -25,6 +25,7 @@ import {
   buildRateLookup,
   calculateBudgetProgress,
   calculateSummary,
+  EMPTY_DATE_RANGE,
   currentMonthKey,
   exceededBudgets,
   getMonthKeysBetween,
@@ -37,6 +38,7 @@ import {
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
+import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
 
@@ -53,6 +55,7 @@ export function StatisticsView() {
     budgets,
     recurring,
     installmentPlans,
+    loans,
     exchangeRate,
     exchangeRateHistory,
     lastBackupAt,
@@ -70,13 +73,14 @@ export function StatisticsView() {
     [budgets, transactions],
   );
 
-  // Both kinds of pending commitment are surfaced together: two separate
-  // notices would make it easy to act on one and never notice the other.
+  // Every kind of pending commitment is surfaced together: separate notices
+  // would make it easy to act on one and never notice the others.
   const pendingCount = useMemo(
     () =>
       collectPendingRecurrences(recurring, todayIsoDate()).length +
-      collectPendingInstallments(installmentPlans, todayIsoDate()).length,
-    [recurring, installmentPlans],
+      collectPendingInstallments(installmentPlans, todayIsoDate()).length +
+      collectPendingLoanPayments(loans, todayIsoDate()).length,
+    [recurring, installmentPlans, loans],
   );
 
   // Every chart and KPI below reads from this single filtered list, so the
@@ -224,7 +228,9 @@ export function StatisticsView() {
               <Select
                 items={{
                   [ALL_YEARS]: "Todos",
-                  ...Object.fromEntries(years.map((year) => [String(year), String(year)])),
+                  ...Object.fromEntries(
+                    years.map((year) => [String(year), String(year)]),
+                  ),
                 }}
                 value={selectedYear === null ? ALL_YEARS : String(selectedYear)}
                 onValueChange={(value) =>

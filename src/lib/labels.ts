@@ -2,6 +2,7 @@ import type { RecurrenceFrequency } from "@/lib/recurring";
 import type {
   BudgetPeriod,
   CategoryType,
+  LoanDirection,
   PaymentMethodType,
   TransactionType,
 } from "@/db/schema";
@@ -47,3 +48,10 @@ export const PAYMENT_METHOD_TYPE_LABELS: Record<PaymentMethodType, string> = {
 export const PAYMENT_METHOD_TYPES = Object.keys(
   PAYMENT_METHOD_TYPE_LABELS,
 ) as PaymentMethodType[];
+
+// Phrased from the user's side rather than the bank's: "borrowed" is money that
+// came in and has to go back out, which reads as "I owe".
+export const LOAN_DIRECTION_LABELS: Record<LoanDirection, string> = {
+  borrowed: "Debo",
+  lent: "Me deben",
+};

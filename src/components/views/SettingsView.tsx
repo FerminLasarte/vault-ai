@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -11,6 +11,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { checkpointDatabase } from "@/db";
 import { useAppData } from "@/hooks/useAppData";
@@ -19,10 +27,17 @@ import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
 import { formatDate, todayIsoDate } from "@/lib/format";
+import {
+  isRateType,
+  RATE_TYPE_DESCRIPTIONS,
+  RATE_TYPE_LABELS,
+  RATE_TYPES,
+} from "@/lib/exchangeRate";
 import { backupStatus } from "@/lib/backupReminder";
 import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/context/ThemeContext";
 import type { ImportSkip } from "@/lib/csv";
+import type { ViewProps } from "@/lib/menu";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "light", label: "Claro" },
@@ -36,7 +51,7 @@ interface ImportOutcome {
   skipped: ImportSkip[];
 }
 
-export function SettingsView() {
+export function SettingsView({ request }: ViewProps) {
   const {
     transactions,
     categories,
@@ -49,6 +64,8 @@ export function SettingsView() {
     backfillExchangeRates,
     lastBackupAt,
     recordBackup,
+    rateType,
+    setRateType,
   } = useAppData();
   const { preference, setPreference } = useTheme();
 
@@ -61,6 +78,7 @@ export function SettingsView() {
     // a trailing separator, so a template literal glues the folder and the file
     // name into one nonexistent path.
     appDataDir()
+      // Still the pre-rename file name; see the note in src/db/index.ts.
       .then((dir) => join(dir, "vault-ai.db"))
       .then(setDatabasePath)
       .catch(() => setDatabasePath(null));
@@ -70,7 +88,7 @@ export function SettingsView() {
     setIsWorking(true);
     try {
       const saved = await saveCsvFile(
-        `vault-ai-${todayIsoDate()}.csv`,
+        `vault-${todayIsoDate()}.csv`,
         transactionsToCsv(transactions),
       );
       if (saved) toast.success(`${transactions.length} transacciones exportadas`);
@@ -87,7 +105,7 @@ export function SettingsView() {
     try {
       // Without this the copy would miss whatever is still in the -wal sidecar.
       await checkpointDatabase();
-      const saved = await saveDatabaseCopy(`vault-ai-${todayIsoDate()}.db`);
+      const saved = await saveDatabaseCopy(`vault-${todayIsoDate()}.db`);
       if (saved) {
         await recordBackup();
         toast.success("Copia de seguridad guardada");
@@ -136,6 +154,37 @@ export function SettingsView() {
     }
   }
 
+  // The three data entries in the Archivo menu. Each opens a native file dialog
+  // and then reads or writes a file, so unlike opening a dialog these genuinely
+  // belong in an effect.
+  //
+  // A ref rather than state: which click was already handled is bookkeeping,
+  // nothing renders from it, and holding it in state would schedule a render
+  // for every menu click on top of the one the action itself causes.
+  const lastRequestSeq = useRef(request?.seq ?? 0);
+  useEffect(() => {
+    if (request === null || request.seq === lastRequestSeq.current) return;
+    lastRequestSeq.current = request.seq;
+
+    const run =
+      request.action === "backup"
+        ? handleBackup
+        : request.action === "export-csv"
+          ? handleExportCsv
+          : request.action === "import-csv"
+            ? handleImportCsv
+            : null;
+
+    // Replaying a native menu click is a reaction to an external system, not
+    // state derived from props: the handler marks itself busy and then awaits a
+    // file dialog, so nothing cascades.
+    if (run !== null) void run();
+    // The handlers are redefined on every render and are only ever invoked in
+    // response to a new sequence number, so listing them here would re-run this
+    // on every render instead of once per menu click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
+
   const busy = isWorking || isMutating;
 
   const backup = backupStatus(lastBackupAt, transactions.length);
@@ -174,8 +223,8 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle>Tus datos</CardTitle>
           <CardDescription>
-            Todo vive únicamente en este equipo. Si se pierde el disco, se pierde
-            todo: no hay copia en ningún servidor.
+            Todo vive únicamente en este equipo. Si se pierde el disco, se pierde todo: no
+            hay copia en ningún servidor.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -195,7 +244,12 @@ export function SettingsView() {
           </p>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" disabled={busy} onClick={handleBackup}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={handleBackup}
+            >
               <HardDriveDownload />
               Guardar copia de seguridad
             </Button>
@@ -223,7 +277,9 @@ export function SettingsView() {
             <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
               <p className="text-sm font-medium">
                 {outcome.imported}{" "}
-                {outcome.imported === 1 ? "transacción importada" : "transacciones importadas"}
+                {outcome.imported === 1
+                  ? "transacción importada"
+                  : "transacciones importadas"}
               </p>
               {outcome.duplicates > 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -257,15 +313,40 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle>Cotizaciones</CardTitle>
           <CardDescription>
-            Con el histórico, cada movimiento se valúa a la cotización del día en
-            que ocurrió, en vez de a la de hoy. Sin él, un gasto viejo parece más
-            barato de lo que fue.
+            Con el histórico, cada movimiento se valúa a la cotización del día en que
+            ocurrió, en vez de a la de hoy. Sin él, un gasto viejo parece más barato de lo
+            que fue.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rate-type">Qué dólar usar</Label>
+            <Select
+              items={RATE_TYPE_LABELS}
+              value={rateType}
+              onValueChange={(value) => {
+                if (isRateType(value)) void setRateType(value);
+              }}
+            >
+              <SelectTrigger id="rate-type" className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {RATE_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {RATE_TYPE_DESCRIPTIONS[rateType]}
+            </p>
+          </div>
+
           <p className="text-sm text-muted-foreground">
             {exchangeRateHistory.length === 0
-              ? "Todavía no descargaste el histórico."
+              ? `Todavía no descargaste el histórico de ${RATE_TYPE_LABELS[rateType].toLowerCase()}.`
               : exchangeRateHistory.length === 1
                 ? "1 cotización guardada. Traé el histórico para valuar el pasado."
                 : `${exchangeRateHistory.length} cotizaciones guardadas, desde ${formatDate(

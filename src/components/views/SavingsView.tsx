@@ -59,11 +59,12 @@ export function SavingsView() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<SavingsGoalWithNames | null>(null);
-  const [pendingDeletion, setPendingDeletion] =
-    useState<SavingsGoalWithNames | null>(null);
-  const [contributionDrafts, setContributionDrafts] = useState<
-    Record<number, string>
-  >({});
+  const [pendingDeletion, setPendingDeletion] = useState<SavingsGoalWithNames | null>(
+    null,
+  );
+  const [contributionDrafts, setContributionDrafts] = useState<Record<number, string>>(
+    {},
+  );
 
   function openCreate() {
     setEditing(null);
@@ -193,8 +194,7 @@ export function SavingsView() {
                     ) : (
                       <>
                         <span>
-                          Faltan{" "}
-                          {formatCurrency(entry.remaining, entry.goal.currency)}
+                          Faltan {formatCurrency(entry.remaining, entry.goal.currency)}
                         </span>
                         {entry.monthlyPace > 0 ? (
                           <span className="flex items-center gap-1">
@@ -273,8 +273,8 @@ export function SavingsView() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar este objetivo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará «{pendingDeletion?.name}» y los aportes que hayas
-              registrado en él. Tus transacciones no se ven afectadas.
+              Se eliminará «{pendingDeletion?.name}» y los aportes que hayas registrado en
+              él. Tus transacciones no se ven afectadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

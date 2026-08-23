@@ -1,4 +1,4 @@
-# vault-ai
+# Vault
 
 Local-first desktop application built with a Tauri (Rust) backend and a React/TypeScript frontend.
 

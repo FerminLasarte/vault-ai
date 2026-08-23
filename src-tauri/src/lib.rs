@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod menu;
+
 // File I/O lives in Rust rather than behind the fs plugin: the plugin scopes
 // every path up front, which for a "save wherever you like" export would mean
 // granting the webview blanket access to the user's home directory. These
@@ -56,6 +58,7 @@ fn backup_database(app: tauri::AppHandle, destination: String) -> Result<(), Str
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
+        // Still the pre-rename file name; see the note in src/db/index.ts.
         .join("vault-ai.db");
 
     fs::copy(&source, &destination)
@@ -605,6 +608,98 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // One dollar rate was never going to be enough: the official, blue, MEP,
+        // CCL, crypto and card quotes are all real prices, and which one values
+        // a movement honestly depends on how that movement actually happened.
+        //
+        // The primary key has to widen from `date` to `(date, rate_type)`, and
+        // SQLite cannot alter a primary key in place, so the table is rebuilt.
+        // Existing rows are the MEP series that has already been downloaded —
+        // thousands of quotes back to 2018 — so they are carried over as
+        // 'bolsa' rather than discarded.
+        Migration {
+            version: 23,
+            description: "add_rate_type_to_exchange_rates",
+            sql: "
+                CREATE TABLE exchange_rates_new (
+                    date TEXT NOT NULL,
+                    rate_type TEXT NOT NULL DEFAULT 'bolsa',
+                    buy REAL NOT NULL,
+                    sell REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL,
+                    PRIMARY KEY (date, rate_type)
+                );
+
+                INSERT INTO exchange_rates_new
+                    (date, rate_type, buy, sell, source, fetched_at)
+                SELECT date, 'bolsa', buy, sell, source, fetched_at
+                FROM exchange_rates;
+
+                DROP TABLE exchange_rates;
+                ALTER TABLE exchange_rates_new RENAME TO exchange_rates;
+            ",
+            kind: MigrationKind::Up,
+        },
+        // Loans, which the instalment plans above cannot express: they have a
+        // direction (money I owe versus money owed to me) and they can carry
+        // interest, so each payment splits into capital and interest instead of
+        // being one flat figure.
+        //
+        // Following the same principle as installment_plans, only
+        // `confirmed_count` is stored. Every payment, its due date, the split
+        // between capital and interest and the outstanding balance are derived
+        // from the loan's terms (see src/lib/loans.ts), so nothing can drift
+        // out of sync with anything else.
+        //
+        // `annual_rate` of 0 is deliberately valid and collapses the French
+        // system into equal payments — which is exactly what an interest-free
+        // loan between two people is, with no special case anywhere.
+        Migration {
+            version: 24,
+            description: "create_loans_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS loans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    direction TEXT NOT NULL
+                        CHECK (direction IN ('borrowed', 'lent')),
+                    counterparty TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    principal REAL NOT NULL CHECK (principal > 0),
+                    currency TEXT NOT NULL,
+                    annual_rate REAL NOT NULL DEFAULT 0 CHECK (annual_rate >= 0),
+                    installment_count INTEGER NOT NULL
+                        CHECK (installment_count > 0),
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    first_due_date TEXT NOT NULL,
+                    confirmed_count INTEGER NOT NULL DEFAULT 0
+                        CHECK (confirmed_count >= 0),
+                    created_at TEXT NOT NULL
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
+        // What a purchase in instalments really costs is not visible from the
+        // financed total alone: the useful figure is the difference against the
+        // cash price, which is the other number the shop actually quotes.
+        //
+        // Deliberately the cash price rather than an interest rate. Nobody is
+        // told the rate of "12 cuotas fijas" — they are shown two prices — so
+        // asking for a rate would mean asking the user to derive it.
+        //
+        // Nullable, because plenty of purchases are genuinely interest-free and
+        // older rows predate the column; NULL means "not recorded", which is
+        // different from "no surcharge".
+        Migration {
+            version: 25,
+            description: "add_cash_price_to_installment_plans",
+            sql: "
+                ALTER TABLE installment_plans ADD COLUMN cash_price REAL;
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -613,11 +708,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Restores the size and position the window was last closed at, and
+        // saves them again on exit.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:vault-ai.db", migrations())
                 .build(),
         )
+        .setup(|app| {
+            app.set_menu(menu::build(app.handle())?)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| menu::handle_event(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,

@@ -22,14 +22,15 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/DatePicker";
 import { CURRENCY_CODES, CURRENCY_LABELS } from "@/lib/currency";
-import { installmentAmounts } from "@/lib/installments";
-import { formatCurrency, todayIsoDate } from "@/lib/format";
+import { financingCost, installmentAmounts } from "@/lib/installments";
+import { formatCurrency, formatPercent, todayIsoDate } from "@/lib/format";
 import type {
   Category,
   InstallmentPlanWithNames,
   NewInstallmentPlan,
   PaymentMethod,
 } from "@/db";
+import { toSelectValue } from "@/lib/forms";
 
 const planSchema = z.object({
   description: z.string().trim().min(1, "La descripción es obligatoria"),
@@ -43,6 +44,13 @@ const planSchema = z.object({
   categoryId: z.coerce.number().int().positive().nullable(),
   paymentMethodId: z.coerce.number().int().positive().nullable(),
   firstDueDate: z.string().min(1, "Selecciona una fecha"),
+  // Optional on purpose. Plenty of purchases really are interest-free, and an
+  // empty field means "no lo sé" rather than "no hay recargo" — so it stays
+  // null instead of defaulting to the total.
+  cashPrice: z
+    .union([z.literal(""), z.coerce.number().positive("Debe ser mayor que 0")])
+    .transform((value) => (value === "" ? null : value))
+    .nullable(),
 });
 
 type PlanFormInput = z.input<typeof planSchema>;
@@ -82,6 +90,7 @@ export function InstallmentPlanDialog({
       categoryId: null,
       paymentMethodId: null,
       firstDueDate: todayIsoDate(),
+      cashPrice: null,
     },
   });
 
@@ -97,6 +106,7 @@ export function InstallmentPlanDialog({
             categoryId: editing.category_id,
             paymentMethodId: editing.payment_method_id,
             firstDueDate: editing.first_due_date,
+            cashPrice: editing.cash_price,
           }
         : {
             description: "",
@@ -106,6 +116,7 @@ export function InstallmentPlanDialog({
             categoryId: null,
             paymentMethodId: null,
             firstDueDate: todayIsoDate(),
+            cashPrice: null,
           },
     );
   }, [open, editing, reset]);
@@ -113,6 +124,7 @@ export function InstallmentPlanDialog({
   const total = Number(watch("totalAmount")) || 0;
   const count = Number(watch("installmentCount")) || 0;
   const currency = watch("currency");
+  const cashPriceInput = watch("cashPrice");
 
   // Shown live so the split — and the cent the last instalment absorbs — is
   // visible before saving rather than a surprise later.
@@ -123,6 +135,14 @@ export function InstallmentPlanDialog({
     const last = amounts[amounts.length - 1];
     return { first, last, differs: first !== last };
   }, [total, count]);
+
+  // What the financing costs, shown while the form is still being filled: the
+  // point of asking for the cash price is to see this before committing.
+  const cost = useMemo(() => {
+    const cash = Number(cashPriceInput);
+    if (!cashPriceInput || !Number.isFinite(cash)) return null;
+    return financingCost({ total_amount: total, cash_price: cash });
+  }, [total, cashPriceInput]);
 
   const expenseCategories = useMemo(
     () => categories.filter((category) => category.type === "expense"),
@@ -183,6 +203,21 @@ export function InstallmentPlanDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="plan-cash-price">Precio de contado (opcional)</Label>
+            <Input
+              id="plan-cash-price"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Si lo sabés"
+              {...register("cashPrice")}
+            />
+            {errors.cashPrice && (
+              <p className="text-xs text-destructive">{errors.cashPrice.message}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="plan-count">Cantidad de cuotas</Label>
             <Input
               id="plan-count"
@@ -197,6 +232,26 @@ export function InstallmentPlanDialog({
               </p>
             )}
           </div>
+
+          {cost && (
+            <p className="text-xs sm:col-span-2">
+              {cost.surcharge > 0 ? (
+                <span className="text-destructive">
+                  Pagás {formatCurrency(cost.surcharge, currency)} más que al contado (
+                  {formatPercent(cost.ratio)}).
+                </span>
+              ) : cost.surcharge < 0 ? (
+                <span className="text-muted-foreground">
+                  Sale {formatCurrency(Math.abs(cost.surcharge), currency)} menos que al
+                  contado.
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  Sin recargo: son cuotas sin interés.
+                </span>
+              )}
+            </p>
+          )}
 
           {preview && (
             <p className="text-xs text-muted-foreground sm:col-span-2">
@@ -246,7 +301,7 @@ export function InstallmentPlanDialog({
                       category.name,
                     ]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 >
                   <SelectTrigger id="plan-category" className="w-full">
@@ -272,12 +327,9 @@ export function InstallmentPlanDialog({
               render={({ field }) => (
                 <Select
                   items={Object.fromEntries(
-                    availableAccounts.map((method) => [
-                      String(method.id),
-                      method.name,
-                    ]),
+                    availableAccounts.map((method) => [String(method.id), method.name]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                   disabled={availableAccounts.length === 0}
                 >

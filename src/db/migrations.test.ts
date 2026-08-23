@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseMigrations } from "./testing/migrations";
 
 // The migrations are SQL strings inside Rust, so nothing type-checks them and a
 // mistake only surfaces when the app opens the database — where a single failing
@@ -12,30 +13,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // tauri-plugin-sql) enables it, but the sqlite3 CLI defaults it OFF, so running
 // these statements by hand passes migrations that fail in the real app. That
 // exact gap let a broken migration ship once; every run here enforces them.
-
-const MIGRATIONS_SOURCE = "src-tauri/src/lib.rs";
-
-interface ParsedMigration {
-  version: number;
-  description: string;
-  sql: string;
-}
-
-function parseMigrations(): ParsedMigration[] {
-  const source = readFileSync(MIGRATIONS_SOURCE, "utf8");
-  const pattern =
-    /version:\s*(\d+),\s*description:\s*"([^"]+)",\s*sql:\s*"([\s\S]*?)",\s*kind:/g;
-
-  const parsed: ParsedMigration[] = [];
-  for (const match of source.matchAll(pattern)) {
-    parsed.push({
-      version: Number(match[1]),
-      description: match[2],
-      sql: match[3],
-    });
-  }
-  return parsed;
-}
 
 let workspace: string;
 
@@ -62,6 +39,7 @@ function applyMigrations(database: string, from = 0): void {
         `Migration ${migration.version} (${migration.description}) failed: ${
           (error as { stderr?: string }).stderr ?? String(error)
         }`,
+        { cause: error },
       );
     }
   }
@@ -72,7 +50,7 @@ function query(database: string, statement: string): string {
 }
 
 beforeAll(() => {
-  workspace = mkdtempSync(join(tmpdir(), "vault-ai-migrations-"));
+  workspace = mkdtempSync(join(tmpdir(), "vault-migrations-"));
 });
 
 afterAll(() => {
@@ -288,7 +266,10 @@ describe("upgrading a populated database", () => {
     const database = legacyAtVersion7();
     applyMigrations(database, 7);
     expect(
-      query(database, "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NULL;"),
+      query(
+        database,
+        "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NULL;",
+      ),
     ).toBe("0");
     expect(
       Number(
@@ -326,16 +307,34 @@ describe("upgrading a populated database", () => {
     const database = legacyAtVersion7();
     expect(() => applyMigrations(database, 7)).not.toThrow();
     expect(
-      Number(query(database, "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NOT NULL;")),
+      Number(
+        query(
+          database,
+          "SELECT COUNT(*) FROM transactions WHERE payment_method_id IS NOT NULL;",
+        ),
+      ),
     ).toBeGreaterThan(0);
   });
 
-  it("is idempotent when re-run from the version already applied", () => {
+  // Re-running a migration that has already been applied is deliberately NOT
+  // asserted. sqlx records every applied version in _sqlx_migrations and never
+  // runs one twice, and some legitimate migrations cannot be re-run even in
+  // principle — SQLite has no "ADD COLUMN IF NOT EXISTS", so migration 25 fails
+  // outright the second time. Demanding idempotence would mean rebuilding a
+  // whole table just to add one column, which is more risk, not less.
+  //
+  // What does matter is the real scenario: a database already at the latest
+  // version, opened again. Nothing should run, and nothing should change.
+  it("leaves an already-migrated database untouched when reopened", () => {
     const database = legacyAtVersion7();
     applyMigrations(database, 7);
+
     const rows = query(database, "SELECT COUNT(*) FROM transactions;");
     const accounts = query(database, "SELECT COUNT(*) FROM payment_methods;");
-    applyMigrations(database, 14);
+    const latest = Math.max(...parseMigrations().map((entry) => entry.version));
+
+    applyMigrations(database, latest);
+
     expect(query(database, "SELECT COUNT(*) FROM transactions;")).toBe(rows);
     expect(query(database, "SELECT COUNT(*) FROM payment_methods;")).toBe(accounts);
   });

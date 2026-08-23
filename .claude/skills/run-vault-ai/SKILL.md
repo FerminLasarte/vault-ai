@@ -1,9 +1,9 @@
 ---
 name: run-vault-ai
-description: Launch the vault-ai desktop app and verify a change end to end — running the real Tauri window, checking that migrations applied to the live SQLite database, inspecting the UI, and driving native file dialogs on macOS. Use whenever asked to run the app, screenshot it, or confirm a change works outside the test suite.
+description: Launch the Vault desktop app and verify a change end to end — running the real Tauri window, checking that migrations applied to the live SQLite database, inspecting the UI, and driving native file dialogs on macOS. Use whenever asked to run the app, screenshot it, or confirm a change works outside the test suite.
 ---
 
-# Running and verifying vault-ai
+# Running and verifying Vault
 
 Tauri v2 desktop app: Rust backend, React frontend, SQLite through
 `tauri-plugin-sql`. Verification takes three separate channels because no
@@ -22,7 +22,7 @@ takes minutes; later ones are seconds.
 frontend at `localhost:1420` with no Tauri IPC, so `@tauri-apps/plugin-sql`
 fails with `Cannot read properties of undefined (reading 'invoke')` and every
 view renders empty behind a "No se pudieron cargar los datos" toast. It is
-still useful — see *Inspecting the UI* — but it proves nothing about data.
+still useful — see _Inspecting the UI_ — but it proves nothing about data.
 
 The app watches `src-tauri/` and restarts on Rust changes; Vite hot-reloads on
 frontend changes. **A hot reload resets the visible view back to Estadísticas**,
@@ -44,7 +44,7 @@ sqlite3 "$DB" "SELECT fetched_at FROM exchange_rates;"
 A `fetched_at` newer than the launch proves the whole frontend chain ran: React
 mounted, the effect fired, the network fetch passed CORS, and the SQL plugin
 wrote. If the migration version is behind and nothing errored in the log,
-`Database.load` is rejecting — see *Migrations* below.
+`Database.load` is rejecting — see _Migrations_ below.
 
 ## Inspecting the UI
 
@@ -64,8 +64,8 @@ checked.
 Capture just the window, not the whole screen:
 
 ```bash
-POS=$(osascript -e 'tell application "System Events" to tell process "vault-ai" to get position of window 1')
-SIZE=$(osascript -e 'tell application "System Events" to tell process "vault-ai" to get size of window 1')
+POS=$(osascript -e 'tell application "System Events" to tell process "Vault" to get position of window 1')
+SIZE=$(osascript -e 'tell application "System Events" to tell process "Vault" to get size of window 1')
 screencapture -x -R"<x>,<y>,<w>,<h>" out.png
 ```
 
@@ -86,16 +86,16 @@ a stale view or a hot reload silently moves the target, and a missed click lands
 on another app and steals focus.
 
 ```bash
-osascript -e 'tell application "System Events" to tell process "vault-ai" to set frontmost to true'
-osascript -e 'tell application "System Events" to tell process "vault-ai" to click at {X, Y}'
+osascript -e 'tell application "System Events" to tell process "Vault" to set frontmost to true'
+osascript -e 'tell application "System Events" to tell process "Vault" to click at {X, Y}'
 ```
 
 ## Driving native file dialogs
 
-Save and open panels appear as a *sheet*, not a window:
+Save and open panels appear as a _sheet_, not a window:
 
 ```bash
-osascript -e 'tell application "System Events" to tell process "vault-ai" to count sheets of window 1'
+osascript -e 'tell application "System Events" to tell process "Vault" to count sheets of window 1'
 ```
 
 Drive them by keyboard, which is far more reliable than clicking:
@@ -143,7 +143,7 @@ Back up before anything that migrates, since migrations that rebuild tables run
 `DROP TABLE`:
 
 ```bash
-cp ~/Library/Application\ Support/com.ferminlasarte.vault-ai/vault-ai.db ~/Desktop/vault-ai-backup.db
+cp ~/Library/Application\ Support/com.ferminlasarte.vault-ai/vault-ai.db ~/Desktop/vault-backup.db
 ```
 
 Delete any test rows written into the live database, and remove temporary copies

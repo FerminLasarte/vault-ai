@@ -20,6 +20,22 @@ export const DEFAULT_CATEGORY_EMOJI = "🏷️";
 
 // Suggestions offered in the category form; the field still accepts any emoji.
 export const EMOJI_SUGGESTIONS = [
-  "💰", "💼", "🍽️", "🚗", "🍿", "🏠", "💊", "🎓", "✈️", "🛒",
-  "☕", "🎁", "📱", "⚡", "🐶", "👕", "🏋️", "📦",
+  "💰",
+  "💼",
+  "🍽️",
+  "🚗",
+  "🍿",
+  "🏠",
+  "💊",
+  "🎓",
+  "✈️",
+  "🛒",
+  "☕",
+  "🎁",
+  "📱",
+  "⚡",
+  "🐶",
+  "👕",
+  "🏋️",
+  "📦",
 ];

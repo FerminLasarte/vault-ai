@@ -60,10 +60,7 @@ export function AccountsView() {
     [paymentMethods, balances],
   );
 
-  const currencyTotals = useMemo(
-    () => Array.from(totalsByCurrency),
-    [totalsByCurrency],
-  );
+  const currencyTotals = useMemo(() => Array.from(totalsByCurrency), [totalsByCurrency]);
 
   const debtByCurrency = useMemo(
     () => outstandingByCurrency(installmentPlans),
@@ -283,8 +280,8 @@ export function AccountsView() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar esta cuenta?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará «{pendingDeletion?.name}». Las transacciones ya registradas
-              se conservan, pero quedarán sin método de pago asociado.
+              Se eliminará «{pendingDeletion?.name}». Las transacciones ya registradas se
+              conservan, pero quedarán sin método de pago asociado.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

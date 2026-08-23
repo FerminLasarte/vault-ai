@@ -1,8 +1,4 @@
-import type {
-  SavingsContribution,
-  SavingsGoalWithNames,
-  Transaction,
-} from "@/db/schema";
+import type { SavingsContribution, SavingsGoalWithNames, Transaction } from "@/db/schema";
 import { calculateAccountBalances } from "@/lib/finance";
 import type { PaymentMethod } from "@/db/schema";
 
@@ -91,9 +87,7 @@ export function calculateSavingsProgress(
 
     if (goal.tracking_mode === "account") {
       current =
-        goal.payment_method_id === null
-          ? 0
-          : (balances.get(goal.payment_method_id) ?? 0);
+        goal.payment_method_id === null ? 0 : (balances.get(goal.payment_method_id) ?? 0);
       recentSaved =
         goal.payment_method_id === null
           ? 0

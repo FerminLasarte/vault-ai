@@ -28,14 +28,13 @@ import {
   RECURRENCE_FREQUENCY_LABELS,
 } from "@/lib/labels";
 import { todayIsoDate } from "@/lib/format";
-import type { RecurrenceFrequency } from "@/lib/recurring";
 import type {
   Category,
-  CategoryType,
   NewRecurringTransaction,
   PaymentMethod,
   RecurringTransactionWithNames,
 } from "@/db";
+import { toSelectValue } from "@/lib/forms";
 
 const recurringSchema = z.object({
   description: z.string().trim().min(1, "La descripción es obligatoria"),
@@ -144,12 +143,10 @@ export function RecurringDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {editing ? "Editar recurrente" : "Nueva recurrente"}
-          </DialogTitle>
+          <DialogTitle>{editing ? "Editar recurrente" : "Nueva recurrente"}</DialogTitle>
           <DialogDescription>
-            La fecha de inicio ancla toda la serie. Si es el 31, los meses cortos
-            usan su último día y el resto vuelve al 31.
+            La fecha de inicio ancla toda la serie. Si es el 31, los meses cortos usan su
+            último día y el resto vuelve al 31.
           </DialogDescription>
         </DialogHeader>
 
@@ -178,7 +175,7 @@ export function RecurringDialog({
                 <Select
                   items={CATEGORY_TYPE_LABELS}
                   value={field.value}
-                  onValueChange={(value) => field.onChange(value as CategoryType)}
+                  onValueChange={(value) => field.onChange(value)}
                 >
                   <SelectTrigger id="recurring-type" className="w-full">
                     <SelectValue placeholder="Selecciona un tipo" />
@@ -187,9 +184,7 @@ export function RecurringDialog({
                     <SelectItem value="expense">
                       {CATEGORY_TYPE_LABELS.expense}
                     </SelectItem>
-                    <SelectItem value="income">
-                      {CATEGORY_TYPE_LABELS.income}
-                    </SelectItem>
+                    <SelectItem value="income">{CATEGORY_TYPE_LABELS.income}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -246,9 +241,7 @@ export function RecurringDialog({
                 <Select
                   items={RECURRENCE_FREQUENCY_LABELS}
                   value={field.value}
-                  onValueChange={(value) =>
-                    field.onChange(value as RecurrenceFrequency)
-                  }
+                  onValueChange={(value) => field.onChange(value)}
                 >
                   <SelectTrigger id="recurring-frequency" className="w-full">
                     <SelectValue placeholder="Selecciona una frecuencia" />
@@ -278,7 +271,7 @@ export function RecurringDialog({
                       category.name,
                     ]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 >
                   <SelectTrigger id="recurring-category" className="w-full">
@@ -304,12 +297,9 @@ export function RecurringDialog({
               render={({ field }) => (
                 <Select
                   items={Object.fromEntries(
-                    availableAccounts.map((method) => [
-                      String(method.id),
-                      method.name,
-                    ]),
+                    availableAccounts.map((method) => [String(method.id), method.name]),
                   )}
-                  value={field.value ? String(field.value) : ""}
+                  value={toSelectValue(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                   disabled={availableAccounts.length === 0}
                 >

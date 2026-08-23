@@ -31,7 +31,10 @@ export function backupStatus(
   now: Date = new Date(),
 ): BackupStatus {
   if (transactionCount === 0) {
-    return { daysAgo: lastBackupAt === null ? null : daysSince(lastBackupAt, now), isOverdue: false };
+    return {
+      daysAgo: lastBackupAt === null ? null : daysSince(lastBackupAt, now),
+      isOverdue: false,
+    };
   }
 
   if (lastBackupAt === null) {

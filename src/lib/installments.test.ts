@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  financingCost,
   installmentAmounts,
   installmentDueDate,
   outstandingAmount,
@@ -85,22 +86,30 @@ describe("pendingInstallments", () => {
   });
 
   it("proposes nothing once the plan is finished", () => {
-    expect(
-      pendingInstallments({ ...plan, confirmed_count: 12 }, "2030-01-01"),
-    ).toEqual([]);
+    expect(pendingInstallments({ ...plan, confirmed_count: 12 }, "2030-01-01")).toEqual(
+      [],
+    );
   });
 });
 
 describe("outstandingAmount", () => {
   it("is the whole total before anything is paid", () => {
     expect(
-      outstandingAmount({ total_amount: 1200, installment_count: 12, confirmed_count: 0 }),
+      outstandingAmount({
+        total_amount: 1200,
+        installment_count: 12,
+        confirmed_count: 0,
+      }),
     ).toBe(1200);
   });
 
   it("shrinks as instalments are confirmed", () => {
     expect(
-      outstandingAmount({ total_amount: 1200, installment_count: 12, confirmed_count: 3 }),
+      outstandingAmount({
+        total_amount: 1200,
+        installment_count: 12,
+        confirmed_count: 3,
+      }),
     ).toBe(900);
   });
 
@@ -127,5 +136,44 @@ describe("outstandingByCurrency", () => {
       { currency: "ARS", total_amount: 1200, installment_count: 12, confirmed_count: 12 },
     ]);
     expect(totals.size).toBe(0);
+  });
+});
+
+describe("financingCost", () => {
+  it("reports the surcharge against the cash price", () => {
+    const cost = financingCost({ total_amount: 1_020_000, cash_price: 800_000 });
+
+    expect(cost?.surcharge).toBe(220_000);
+    expect(cost?.ratio).toBeCloseTo(0.275, 4);
+  });
+
+  it("reports no surcharge for genuinely interest-free instalments", () => {
+    const cost = financingCost({ total_amount: 800_000, cash_price: 800_000 });
+
+    expect(cost?.surcharge).toBe(0);
+    expect(cost?.ratio).toBe(0);
+  });
+
+  it("handles a purchase that is cheaper in instalments", () => {
+    // Promotions where financing beats the counter price do exist; reporting a
+    // negative surcharge is more honest than clamping it to zero.
+    const cost = financingCost({ total_amount: 90, cash_price: 100 });
+    expect(cost?.surcharge).toBe(-10);
+  });
+
+  it("says nothing when the cash price was never recorded", () => {
+    // Not recorded is not the same as no surcharge, so this must not report 0.
+    expect(financingCost({ total_amount: 1000, cash_price: null })).toBeNull();
+  });
+
+  it("refuses to divide by a cash price that cannot anchor a percentage", () => {
+    expect(financingCost({ total_amount: 1000, cash_price: 0 })).toBeNull();
+    expect(financingCost({ total_amount: 1000, cash_price: -5 })).toBeNull();
+    expect(financingCost({ total_amount: 1000, cash_price: NaN })).toBeNull();
+  });
+
+  it("rounds the surcharge to cents", () => {
+    const cost = financingCost({ total_amount: 100.555, cash_price: 100 });
+    expect(cost?.surcharge).toBe(0.56);
   });
 });

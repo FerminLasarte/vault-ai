@@ -103,9 +103,43 @@ export interface InstallmentPlan {
   first_due_date: string;
   confirmed_count: number;
   created_at: string;
+  // What the same purchase would have cost paid outright, when the user knows
+  // it. `null` means "not recorded", which is not the same as "no surcharge".
+  cash_price: number | null;
 }
 
 export interface InstallmentPlanWithNames extends InstallmentPlan {
+  category_name: string | null;
+  category_icon: string | null;
+  payment_method_name: string | null;
+}
+
+export type LoanDirection = "borrowed" | "lent";
+
+// A loan, in either direction. Like the instalment plans above, only
+// `confirmed_count` is stored: the schedule, the split between capital and
+// interest and the outstanding balance are all derived from the terms (see
+// src/lib/loans.ts).
+//
+// `annual_rate` of 0 is valid and makes this an interest-free loan between two
+// people, which needs no special case anywhere.
+export interface Loan {
+  id: number;
+  direction: LoanDirection;
+  counterparty: string;
+  description: string;
+  principal: number;
+  currency: string;
+  annual_rate: number;
+  installment_count: number;
+  category_id: number | null;
+  payment_method_id: number | null;
+  first_due_date: string;
+  confirmed_count: number;
+  created_at: string;
+}
+
+export interface LoanWithNames extends Loan {
   category_name: string | null;
   category_icon: string | null;
   payment_method_name: string | null;
@@ -201,11 +235,16 @@ export interface CategoryRuleWithCategory extends CategoryRule {
   category_type: CategoryType;
 }
 
-// One cached quote per day. `sell` is what a dollar costs to buy, and is the
-// figure used for conversions; `buy` is kept for reference and for a future
-// view that needs the spread.
+// One cached quote per day and per rate. `sell` is what a dollar costs to buy,
+// and is the figure used for conversions; `buy` is kept for reference and for a
+// future view that needs the spread.
+//
+// `rate_type` is which dollar this is — official, blue, MEP and so on. Several
+// rates can be cached side by side, so switching between them does not throw
+// away a history that took a download to build.
 export interface ExchangeRate {
   date: string;
+  rate_type: string;
   buy: number;
   sell: number;
   source: string;

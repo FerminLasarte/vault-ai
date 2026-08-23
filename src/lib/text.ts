@@ -3,11 +3,7 @@
 // compares user-typed text against stored text — search, CSV lookups,
 // categorisation rules — has to agree on what "the same" means.
 export function normalizeForSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim()
-    .toLowerCase();
+  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 }
 
 // Tag names are stored one per row but read back as a single aggregated string;

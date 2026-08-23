@@ -26,14 +26,8 @@ const GROUPS: { type: CategoryType; title: string }[] = [
 ];
 
 export function CategoriesView() {
-  const {
-    categories,
-    isLoading,
-    isMutating,
-    addCategory,
-    editCategory,
-    removeCategory,
-  } = useAppData();
+  const { categories, isLoading, isMutating, addCategory, editCategory, removeCategory } =
+    useAppData();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
@@ -90,9 +84,7 @@ export function CategoriesView() {
       ) : categories.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 py-6">
-            <p className="text-sm text-muted-foreground">
-              Todavía no tienes categorías.
-            </p>
+            <p className="text-sm text-muted-foreground">Todavía no tienes categorías.</p>
             <Button type="button" variant="outline" onClick={openCreateDialog}>
               <Plus />
               Agregar la primera
@@ -177,9 +169,9 @@ export function CategoriesView() {
             <AlertDialogTitle>¿Eliminar esta categoría?</AlertDialogTitle>
             <AlertDialogDescription>
               Se eliminará «{pendingDeletion?.name}» (
-              {pendingDeletion ? CATEGORY_TYPE_LABELS[pendingDeletion.type] : ""}).
-              Las transacciones ya registradas se conservan, pero quedarán sin
-              categoría asociada.
+              {pendingDeletion ? CATEGORY_TYPE_LABELS[pendingDeletion.type] : ""}). Las
+              transacciones ya registradas se conservan, pero quedarán sin categoría
+              asociada.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -13,9 +13,7 @@ import {
   TAGS_HEADER,
 } from "@/lib/csv";
 
-function makeRow(
-  overrides: Partial<TransactionWithCategory>,
-): TransactionWithCategory {
+function makeRow(overrides: Partial<TransactionWithCategory>): TransactionWithCategory {
   return {
     id: 1,
     amount: 100,
@@ -46,7 +44,13 @@ const categories: Category[] = [
 
 const accounts: PaymentMethod[] = [
   { id: 1, name: "Efectivo ARS", type: "cash", currency: "ARS", initial_balance: 0 },
-  { id: 5, name: "Cuenta Bancaria USD", type: "bank", currency: "USD", initial_balance: 0 },
+  {
+    id: 5,
+    name: "Cuenta Bancaria USD",
+    type: "bank",
+    currency: "USD",
+    initial_balance: 0,
+  },
 ];
 
 const context = {
@@ -103,9 +107,7 @@ describe("parseCsv", () => {
 
 describe("transactionsToCsv", () => {
   it("writes the required columns plus the optional tag column", () => {
-    expect(transactionsToCsv([]).trim()).toBe(
-      [...CSV_HEADERS, TAGS_HEADER].join(","),
-    );
+    expect(transactionsToCsv([]).trim()).toBe([...CSV_HEADERS, TAGS_HEADER].join(","));
   });
 
   it("quotes a description containing a comma", () => {
@@ -281,7 +283,9 @@ describe("buildImportPlan with categorisation rules", () => {
   }
 
   it("fills in a missing category from a matching rule", () => {
-    const plan = planWithRules("2026-08-01,Gasto,10,ARS,,Efectivo ARS,,,Netflix mensual\n");
+    const plan = planWithRules(
+      "2026-08-01,Gasto,10,ARS,,Efectivo ARS,,,Netflix mensual\n",
+    );
     expect(plan.skipped).toEqual([]);
     expect(plan.ready[0].transaction.categoryId).toBe(7);
   });
@@ -385,7 +389,9 @@ describe("categories that exist under both kinds", () => {
       ] as Category[],
     };
     const plan = buildImportPlan(
-      parseCsv(`${CSV_HEADERS.join(",")}\n2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n`),
+      parseCsv(
+        `${CSV_HEADERS.join(",")}\n2026-08-01,Gasto,100,ARS,Trabajo,Efectivo ARS,,,Insumos\n`,
+      ),
       onlyIncome,
     );
     expect(plan.ready).toEqual([]);
