@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
+import { Bell, CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
 import { formatDate, todayIsoDate } from "@/lib/format";
+import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import {
   isRateType,
   RATE_TYPE_DESCRIPTIONS,
@@ -66,10 +67,16 @@ export function SettingsView({ request }: ViewProps) {
     recordBackup,
     rateType,
     setRateType,
+    notificationsEnabled,
+    setNotificationsEnabled,
   } = useAppData();
   const { preference, setPreference } = useTheme();
 
   const [databasePath, setDatabasePath] = useState<string | null>(null);
+  // null while unknown; the app cannot notify at all if macOS says no, and
+  // saying so is the difference between a setting that looks broken and one
+  // that explains itself.
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
 
@@ -83,6 +90,22 @@ export function SettingsView({ request }: ViewProps) {
       .then(setDatabasePath)
       .catch(() => setDatabasePath(null));
   }, []);
+
+  useEffect(() => {
+    isPermissionGranted()
+      .then(setPermissionGranted)
+      .catch(() => setPermissionGranted(null));
+  }, [notificationsEnabled]);
+
+  async function handleEnableNotifications(enabled: boolean) {
+    await setNotificationsEnabled(enabled);
+    if (!enabled) return;
+    // Asking here rather than waiting for the next scheduled check, so the
+    // system prompt arrives while the user is looking at the setting they just
+    // turned on.
+    const granted = await requestPermission();
+    setPermissionGranted(granted === "granted");
+  }
 
   async function handleExportCsv() {
     setIsWorking(true);
@@ -216,6 +239,35 @@ export function SettingsView({ request }: ViewProps) {
               ))}
             </TabsList>
           </Tabs>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notificaciones</CardTitle>
+          <CardDescription>
+            Avisos de cuotas vencidas, recurrentes pendientes y presupuestos cerca del
+            límite. Solo mientras Vault esté abierta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Tabs
+            value={notificationsEnabled ? "on" : "off"}
+            onValueChange={(next) => void handleEnableNotifications(next === "on")}
+          >
+            <TabsList>
+              <TabsTrigger value="on">Activadas</TabsTrigger>
+              <TabsTrigger value="off">Desactivadas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {notificationsEnabled && permissionGranted === false && (
+            <p className="flex items-center gap-2 text-sm text-destructive">
+              <Bell className="size-4 shrink-0" />
+              macOS tiene los avisos bloqueados para Vault. Activalos en Ajustes del
+              sistema → Notificaciones.
+            </p>
+          )}
         </CardContent>
       </Card>
 

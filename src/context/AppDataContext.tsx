@@ -22,6 +22,7 @@ import {
   deletePaymentMethod,
   deleteTransaction,
   EXCHANGE_RATE_TYPE,
+  NOTIFICATIONS_ENABLED,
   getLatestExchangeRate,
   getSetting,
   LAST_BACKUP_AT,
@@ -96,6 +97,7 @@ import {
 } from "@/lib/exchangeRate";
 import type { RateType } from "@/lib/exchangeRate";
 import { todayIsoDate } from "@/lib/format";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export interface AppData {
   transactions: TransactionWithCategory[];
@@ -120,6 +122,9 @@ export interface AppData {
   exchangeRateHistory: ExchangeRate[];
   // When the last backup was taken, or null if there has never been one.
   lastBackupAt: string | null;
+  // Whether the app may raise system notifications. Persisted, so turning them
+  // off is a decision and not something that resets on the next launch.
+  notificationsEnabled: boolean;
   isLoading: boolean;
   isMutating: boolean;
   isRefreshingRate: boolean;
@@ -210,6 +215,7 @@ export interface AppData {
   // Called after a backup actually lands on disk, so the reminder measures
   // real copies rather than attempts.
   recordBackup: () => Promise<void>;
+  setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -235,6 +241,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
   const [isRefreshingRate, setIsRefreshingRate] = useState(false);
@@ -264,6 +271,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       cachedRate,
       cachedHistory,
       storedLastBackup,
+      storedNotifications,
     ] = await Promise.all([
       listTransactionsWithCategory(),
       listCategories(),
@@ -279,6 +287,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       getLatestExchangeRate(activeRateType),
       listExchangeRates(activeRateType),
       getSetting(LAST_BACKUP_AT),
+      getSetting(NOTIFICATIONS_ENABLED),
     ]);
     setTransactions(nextTransactions);
     setCategories(nextCategories);
@@ -295,6 +304,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setExchangeRate(cachedRate);
     setExchangeRateHistory(cachedHistory);
     setLastBackupAt(storedLastBackup);
+    // Absent means "never chosen", and the useful default is on.
+    setNotificationsEnabledState(storedNotifications !== "false");
   }, []);
 
   // Fetches the current quote and caches it. A failure is not exceptional —
@@ -343,6 +354,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       // Offline is normal for a local-first app; the cached quote above stands.
       console.error("Failed to fetch the newly selected rate:", error);
     }
+  }, []);
+
+  const setNotificationsEnabled = useCallback(async (enabled: boolean) => {
+    await setSetting(NOTIFICATIONS_ENABLED, enabled ? "true" : "false");
+    setNotificationsEnabledState(enabled);
   }, []);
 
   const recordBackup = useCallback(async () => {
@@ -460,6 +476,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
+      notificationsEnabled,
       isLoading,
       isMutating,
       isRefreshingRate,
@@ -469,6 +486,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       saveManualExchangeRate,
       backfillExchangeRates,
       recordBackup,
+      setNotificationsEnabled,
 
       addTransaction: (transaction, transactionTags) =>
         runMutation(
@@ -769,6 +787,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
+      notificationsEnabled,
       isLoading,
       isMutating,
       isRefreshingRate,
@@ -777,9 +796,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       saveManualExchangeRate,
       backfillExchangeRates,
       recordBackup,
+      setNotificationsEnabled,
       runMutation,
     ],
   );
+
+  // Mounted here rather than in a view: the check has to happen whatever screen
+  // the user happens to be on, and this is the one place that holds all of the
+  // data it needs. Deliberately waits for the initial load — checking against
+  // empty arrays would announce nothing and then record that as "seen".
+  useNotifications({
+    enabled: notificationsEnabled,
+    ready: !isLoading,
+    sources: { installmentPlans, loans, recurring, budgets, transactions },
+  });
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
