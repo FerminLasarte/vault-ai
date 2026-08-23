@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
@@ -36,5 +36,14 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+  },
+
+  // Tests default to the node environment, which is what the pure logic in
+  // src/lib and the migration checks need. Component tests opt into a DOM with
+  // a `// @vitest-environment jsdom` docblock, so the fast majority of the
+  // suite never pays for spinning one up.
+  test: {
+    environment: "node",
+    setupFiles: ["./src/test/setup.ts"],
   },
 }));
