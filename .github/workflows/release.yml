@@ -48,8 +48,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Vault ${{ github.ref_name }}
+          # Only a tag push publishes a release. Run manually and these stay
+          # empty, so the action just builds and the installers come back as
+          # run artifacts instead of a release named after a branch.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('Vault {0}', github.ref_name) || '' }}
           # A draft, so the release can be checked before anyone downloads it.
           releaseDraft: true
           prerelease: false
