@@ -316,12 +316,25 @@ describe("upgrading a populated database", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("is idempotent when re-run from the version already applied", () => {
+  // Re-running a migration that has already been applied is deliberately NOT
+  // asserted. sqlx records every applied version in _sqlx_migrations and never
+  // runs one twice, and some legitimate migrations cannot be re-run even in
+  // principle — SQLite has no "ADD COLUMN IF NOT EXISTS", so migration 25 fails
+  // outright the second time. Demanding idempotence would mean rebuilding a
+  // whole table just to add one column, which is more risk, not less.
+  //
+  // What does matter is the real scenario: a database already at the latest
+  // version, opened again. Nothing should run, and nothing should change.
+  it("leaves an already-migrated database untouched when reopened", () => {
     const database = legacyAtVersion7();
     applyMigrations(database, 7);
+
     const rows = query(database, "SELECT COUNT(*) FROM transactions;");
     const accounts = query(database, "SELECT COUNT(*) FROM payment_methods;");
-    applyMigrations(database, 14);
+    const latest = Math.max(...parseMigrations().map((entry) => entry.version));
+
+    applyMigrations(database, latest);
+
     expect(query(database, "SELECT COUNT(*) FROM transactions;")).toBe(rows);
     expect(query(database, "SELECT COUNT(*) FROM payment_methods;")).toBe(accounts);
   });

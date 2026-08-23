@@ -88,3 +88,30 @@ export function outstandingByCurrency(
 
   return totals;
 }
+
+export interface FinancingCost {
+  // What the instalments add on top of paying outright.
+  surcharge: number;
+  // That surcharge as a share of the cash price, i.e. 0.275 for 27,5%.
+  ratio: number;
+}
+
+// What financing the purchase actually cost, measured against the cash price.
+//
+// Deliberately not expressed as an interest rate: a shop quotes two prices, not
+// a rate, and turning one into the other would invent a compounding convention
+// the user never agreed to. The difference in pesos is the honest figure.
+//
+// Returns null when there is nothing to compare against, and when the cash
+// price is not a usable figure — dividing by zero would report Infinity as a
+// percentage.
+export function financingCost(plan: {
+  total_amount: number;
+  cash_price: number | null;
+}): FinancingCost | null {
+  const cash = plan.cash_price;
+  if (cash === null || !Number.isFinite(cash) || cash <= 0) return null;
+
+  const surcharge = Math.round((plan.total_amount - cash) * 100) / 100;
+  return { surcharge, ratio: surcharge / cash };
+}

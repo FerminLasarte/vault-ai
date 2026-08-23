@@ -428,6 +428,8 @@ export interface NewInstallmentPlan {
   categoryId: number | null;
   paymentMethodId: number | null;
   firstDueDate: string;
+  // Optional: what the purchase would have cost paid outright.
+  cashPrice: number | null;
 }
 
 export async function insertInstallmentPlan(plan: NewInstallmentPlan): Promise<void> {
@@ -435,8 +437,8 @@ export async function insertInstallmentPlan(plan: NewInstallmentPlan): Promise<v
   await db.execute(
     `INSERT INTO installment_plans
        (description, total_amount, installment_count, currency, category_id,
-        payment_method_id, first_due_date, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        payment_method_id, first_due_date, cash_price, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       plan.description,
       plan.totalAmount,
@@ -445,6 +447,7 @@ export async function insertInstallmentPlan(plan: NewInstallmentPlan): Promise<v
       plan.categoryId,
       plan.paymentMethodId,
       plan.firstDueDate,
+      plan.cashPrice,
       new Date().toISOString(),
     ],
   );
@@ -459,8 +462,8 @@ export async function updateInstallmentPlan(
     `UPDATE installment_plans
      SET description = $1, total_amount = $2, installment_count = $3,
          currency = $4, category_id = $5, payment_method_id = $6,
-         first_due_date = $7
-     WHERE id = $8`,
+         first_due_date = $7, cash_price = $8
+     WHERE id = $9`,
     [
       plan.description,
       plan.totalAmount,
@@ -469,6 +472,7 @@ export async function updateInstallmentPlan(
       plan.categoryId,
       plan.paymentMethodId,
       plan.firstDueDate,
+      plan.cashPrice,
       id,
     ],
   );

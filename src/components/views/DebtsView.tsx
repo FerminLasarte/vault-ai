@@ -26,8 +26,12 @@ import { LoansSection } from "@/components/LoansSection";
 import { InstallmentPlanDialog } from "@/components/InstallmentPlanDialog";
 import { useAppData } from "@/hooks/useAppData";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
-import { outstandingAmount, outstandingByCurrency } from "@/lib/installments";
-import { formatCurrency, formatDate, todayIsoDate } from "@/lib/format";
+import {
+  financingCost,
+  outstandingAmount,
+  outstandingByCurrency,
+} from "@/lib/installments";
+import { formatCurrency, formatDate, formatPercent, todayIsoDate } from "@/lib/format";
 import type { InstallmentPlanWithNames, NewInstallmentPlan } from "@/db";
 
 export function DebtsView() {
@@ -102,7 +106,8 @@ export function DebtsView() {
         <TabsContent value="installments" className="flex flex-col gap-6 pt-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              Compras financiadas en cuotas iguales, sin interés explícito.
+              Compras en cuotas iguales. Cargá el precio de contado y te dice cuánto de
+              más estás pagando.
             </p>
             <Button type="button" onClick={openCreate}>
               <Plus />
@@ -227,6 +232,7 @@ export function DebtsView() {
                     const remaining = outstandingAmount(plan);
                     const paidRatio = plan.confirmed_count / plan.installment_count;
                     const isSettled = plan.confirmed_count >= plan.installment_count;
+                    const cost = financingCost(plan);
 
                     return (
                       <li key={plan.id} className="flex flex-col gap-2">
@@ -283,6 +289,16 @@ export function DebtsView() {
                         <p className="text-xs text-muted-foreground">
                           Total {formatCurrency(plan.total_amount, plan.currency)} ·
                           primera cuota {formatDate(plan.first_due_date)}
+                          {cost !== null && cost.surcharge > 0 && (
+                            <>
+                              {" · "}
+                              <span className="text-destructive">
+                                {formatCurrency(cost.surcharge, plan.currency)} de recargo
+                                ({formatPercent(cost.ratio)})
+                              </span>
+                            </>
+                          )}
+                          {cost !== null && cost.surcharge === 0 && " · sin interés"}
                         </p>
                       </li>
                     );

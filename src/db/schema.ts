@@ -103,6 +103,9 @@ export interface InstallmentPlan {
   first_due_date: string;
   confirmed_count: number;
   created_at: string;
+  // What the same purchase would have cost paid outright, when the user knows
+  // it. `null` means "not recorded", which is not the same as "no surcharge".
+  cash_price: number | null;
 }
 
 export interface InstallmentPlanWithNames extends InstallmentPlan {

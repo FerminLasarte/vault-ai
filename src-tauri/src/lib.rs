@@ -681,6 +681,25 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // What a purchase in instalments really costs is not visible from the
+        // financed total alone: the useful figure is the difference against the
+        // cash price, which is the other number the shop actually quotes.
+        //
+        // Deliberately the cash price rather than an interest rate. Nobody is
+        // told the rate of "12 cuotas fijas" — they are shown two prices — so
+        // asking for a rate would mean asking the user to derive it.
+        //
+        // Nullable, because plenty of purchases are genuinely interest-free and
+        // older rows predate the column; NULL means "not recorded", which is
+        // different from "no surcharge".
+        Migration {
+            version: 25,
+            description: "add_cash_price_to_installment_plans",
+            sql: "
+                ALTER TABLE installment_plans ADD COLUMN cash_price REAL;
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
