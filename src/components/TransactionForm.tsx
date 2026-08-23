@@ -129,6 +129,7 @@ export function TransactionForm({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormInput, unknown, TransactionFormValues>({
@@ -305,21 +306,39 @@ export function TransactionForm({
     [filteredCategories],
   );
 
-  // Keep the selected category valid whenever the type changes or categories load.
+  // Keep the selected category valid whenever the type changes or categories
+  // load, so switching between Gasto and Ingreso cannot leave a category from
+  // the other list selected.
+  //
+  // Everything here is read through `getValues` rather than from the watched
+  // values above, and that is the whole point. The effect that loads a
+  // transaction for editing runs in this same pass and calls `reset`; the
+  // watched values are the render's snapshot, so they still hold whatever the
+  // form had *before* that reset. Judging validity against them found the saved
+  // category missing from a list built for the previous type, decided it was
+  // invalid, and replaced it with the first category on the list — silently
+  // reassigning the category of every transaction that was opened for editing.
+  //
+  // `reset` updates the form's values synchronously, so `getValues` here sees
+  // what was just loaded.
   useEffect(() => {
-    if (isTransfer) {
+    const currentType = getValues("type");
+
+    if (currentType === "transfer") {
       setValue("categoryId", null, { shouldValidate: false });
       return;
     }
-    const stillValid = filteredCategories.some(
-      (category) => category.id === selectedCategoryId,
-    );
+
+    const available = categories.filter((category) => category.type === currentType);
+    const currentCategoryId = getValues("categoryId");
+    const stillValid = available.some((category) => category.id === currentCategoryId);
+
     if (!stillValid) {
-      setValue("categoryId", filteredCategories[0]?.id ?? null, {
-        shouldValidate: false,
-      });
+      setValue("categoryId", available[0]?.id ?? null, { shouldValidate: false });
     }
-  }, [isTransfer, filteredCategories, selectedCategoryId, setValue]);
+    // Triggered by the watched values changing, but deliberately read fresh
+    // inside; see above.
+  }, [categories, selectedType, selectedCategoryId, editing, getValues, setValue]);
 
   async function onSubmit(values: TransactionFormValues) {
     const transfer = values.type === "transfer";
