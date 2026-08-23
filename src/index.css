@@ -128,6 +128,17 @@
     @apply font-sans;
   }
 
+  /* Tailwind v4 dropped the `cursor: pointer` its v3 preflight put on buttons,
+     so every button in the app was showing the plain arrow and nothing looked
+     clickable. Restored here rather than on each component: it has to hold for
+     the shadcn primitives and every menu, tab and select trigger too.
+
+     Disabled controls keep the default cursor, because they are not. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
   /* This is a desktop window, not a document: the page itself must never
      scroll, only the content column inside it.
 

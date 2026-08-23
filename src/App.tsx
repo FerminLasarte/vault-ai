@@ -1,5 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Sidebar, type View } from "@/components/layout/Sidebar";
+import { useAppData } from "@/hooks/useAppData";
+import { pendingBadges } from "@/lib/pendingBadges";
+import { todayIsoDate } from "@/lib/format";
 import { StatisticsView } from "@/components/views/StatisticsView";
 import { TransactionsView } from "@/components/views/TransactionsView";
 import { CategoriesView } from "@/components/views/CategoriesView";
@@ -34,6 +37,30 @@ const VIEWS: Record<View, (props: ViewProps) => React.JSX.Element> = {
   settings: SettingsView,
 };
 
+// The sidebar is a child of the data provider while App itself renders it, so
+// App cannot read the data. This wrapper sits on the inside and does, which
+// keeps Sidebar a presentational component that simply takes counts.
+function SidebarWithBadges({
+  currentView,
+  onNavigate,
+}: {
+  currentView: View;
+  onNavigate: (view: View) => void;
+}) {
+  const { recurring, installmentPlans, loans, budgets, transactions } = useAppData();
+
+  const badges = useMemo(
+    () =>
+      pendingBadges(
+        { recurring, installmentPlans, loans, budgets, transactions },
+        todayIsoDate(),
+      ),
+    [recurring, installmentPlans, loans, budgets, transactions],
+  );
+
+  return <Sidebar currentView={currentView} badges={badges} onNavigate={onNavigate} />;
+}
+
 function App() {
   const [view, setView] = useState<View>("statistics");
   const [request, setRequest] = useState<MenuRequest | null>(null);
@@ -63,7 +90,7 @@ function App() {
         <TooltipProvider delay={350}>
           <AppDataProvider>
             <div className="flex h-screen bg-background text-foreground">
-              <Sidebar currentView={view} onNavigate={setView} />
+              <SidebarWithBadges currentView={view} onNavigate={setView} />
               <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-8">
                 <ErrorBoundary
                   resetKey={view}

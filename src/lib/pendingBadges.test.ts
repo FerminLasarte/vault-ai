@@ -1,0 +1,175 @@
+import { describe, expect, it } from "vitest";
+import { pendingBadges } from "./pendingBadges";
+import type { NotificationSources } from "./notifications";
+import type {
+  BudgetWithCategory,
+  InstallmentPlanWithNames,
+  LoanWithNames,
+  RecurringTransactionWithNames,
+  Transaction,
+} from "@/db/schema";
+
+const TODAY = "2026-08-23";
+
+function sources(overrides: Partial<NotificationSources> = {}): NotificationSources {
+  return {
+    installmentPlans: [],
+    loans: [],
+    recurring: [],
+    budgets: [],
+    transactions: [],
+    ...overrides,
+  };
+}
+
+function aPlan(): InstallmentPlanWithNames {
+  return {
+    id: 1,
+    description: "Notebook",
+    total_amount: 120000,
+    installment_count: 12,
+    currency: "ARS",
+    category_id: null,
+    payment_method_id: null,
+    first_due_date: "2026-07-10",
+    confirmed_count: 0,
+    created_at: "2026-07-01T00:00:00Z",
+    cash_price: null,
+    category_name: null,
+    category_icon: null,
+    payment_method_name: null,
+  };
+}
+
+function aLoan(): LoanWithNames {
+  return {
+    id: 1,
+    direction: "borrowed",
+    counterparty: "Banco",
+    description: "Préstamo",
+    principal: 1_000_000,
+    currency: "ARS",
+    annual_rate: 0,
+    installment_count: 12,
+    category_id: null,
+    payment_method_id: null,
+    first_due_date: "2026-08-10",
+    confirmed_count: 0,
+    created_at: "2026-08-01T00:00:00Z",
+    category_name: null,
+    category_icon: null,
+    payment_method_name: null,
+  };
+}
+
+function aRecurring(): RecurringTransactionWithNames {
+  return {
+    id: 1,
+    description: "Alquiler",
+    amount: 500000,
+    type: "expense",
+    category_id: null,
+    payment_method_id: null,
+    currency: "ARS",
+    frequency: "monthly",
+    start_date: "2026-08-01",
+    last_confirmed_date: null,
+    is_active: 1,
+    category_name: null,
+    category_icon: null,
+    payment_method_name: null,
+  };
+}
+
+function aBudget(): BudgetWithCategory {
+  return {
+    id: 1,
+    category_id: 7,
+    currency: "ARS",
+    amount: 100000,
+    period: "monthly",
+    category_name: "Salida",
+    category_icon: "🍺",
+    category_color: "#f00",
+  };
+}
+
+function anExpense(amount: number): Transaction {
+  return {
+    id: 1,
+    amount,
+    type: "expense",
+    category_id: 7,
+    payment_method_id: null,
+    destination_payment_method_id: null,
+    destination_amount: null,
+    description: "Gasto",
+    date: "2026-08-05",
+    currency: "ARS",
+  };
+}
+
+describe("pendingBadges", () => {
+  it("shows nothing when nothing is pending", () => {
+    // An app with no commitments must not wear a permanent mark; a badge that
+    // is always there stops meaning anything.
+    expect(pendingBadges(sources(), TODAY)).toEqual({});
+  });
+
+  it("counts overdue instalments and loan payments in one badge", () => {
+    // Both live in the Deudas section, so two badges there would be one number
+    // split in half for no reason.
+    const badges = pendingBadges(
+      sources({ installmentPlans: [aPlan()], loans: [aLoan()] }),
+      TODAY,
+    );
+
+    // July and August for the plan, August for the loan.
+    expect(badges.debts).toBe(3);
+  });
+
+  it("counts pending recurring movements", () => {
+    expect(pendingBadges(sources({ recurring: [aRecurring()] }), TODAY).recurring).toBe(
+      1,
+    );
+  });
+
+  it("counts budgets at or over the limit", () => {
+    const badges = pendingBadges(
+      sources({ budgets: [aBudget()], transactions: [anExpense(85_000)] }),
+      TODAY,
+    );
+
+    expect(badges.budgets).toBe(1);
+  });
+
+  it("stays quiet about a budget that is merely being spent", () => {
+    const badges = pendingBadges(
+      sources({ budgets: [aBudget()], transactions: [anExpense(50_000)] }),
+      TODAY,
+    );
+
+    expect(badges.budgets).toBeUndefined();
+  });
+
+  it("marks only the sections that can be acted on", () => {
+    const badges = pendingBadges(
+      sources({ installmentPlans: [aPlan()], recurring: [aRecurring()] }),
+      TODAY,
+    );
+
+    // Estadísticas is a summary; sending the user there would be a dead end.
+    expect(Object.keys(badges).sort()).toEqual(["debts", "recurring"]);
+  });
+
+  it("says nothing about something not due yet", () => {
+    const badges = pendingBadges(
+      sources({
+        installmentPlans: [{ ...aPlan(), first_due_date: "2026-12-10" }],
+      }),
+      TODAY,
+    );
+
+    expect(badges.debts).toBeUndefined();
+  });
+});
