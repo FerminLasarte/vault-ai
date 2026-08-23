@@ -19,6 +19,7 @@ import {
   deleteCategoryRule,
   deletePaymentMethod,
   deleteTransaction,
+  EXCHANGE_RATE_TYPE,
   getLatestExchangeRate,
   getSetting,
   LAST_BACKUP_AT,
@@ -80,10 +81,13 @@ import {
   type TransactionWithCategory,
 } from "@/db";
 import {
-  fetchMepRate,
-  fetchMepRateHistory,
+  DEFAULT_RATE_TYPE,
+  fetchRate,
+  fetchRateHistory,
+  isRateType,
   MANUAL_RATE_SOURCE,
 } from "@/lib/exchangeRate";
+import type { RateType } from "@/lib/exchangeRate";
 import { todayIsoDate } from "@/lib/format";
 
 export interface AppData {
@@ -98,6 +102,10 @@ export interface AppData {
   savingsGoals: SavingsGoalWithNames[];
   savingsContributions: SavingsContribution[];
   // Latest known MEP quote, or null before the very first successful fetch.
+  // Which dollar the app values foreign movements at. Persisted, because a
+  // conversion that silently changes meaning between launches is worse than no
+  // conversion at all.
+  rateType: RateType;
   exchangeRate: ExchangeRate | null;
   // Every cached quote, used to value each movement at the rate of its own
   // date instead of restating the past at today's.
@@ -172,6 +180,7 @@ export interface AppData {
   editPaymentMethod: (id: number, method: NewPaymentMethod) => Promise<void>;
   removePaymentMethod: (id: number) => Promise<void>;
 
+  setRateType: (type: RateType) => Promise<void>;
   refreshExchangeRate: (options?: { silent?: boolean }) => Promise<void>;
   saveManualExchangeRate: (buy: number, sell: number) => Promise<void>;
   // Downloads the whole historical series. Explicit rather than automatic:
@@ -200,6 +209,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [savingsContributions, setSavingsContributions] = useState<SavingsContribution[]>(
     [],
   );
+  const [rateType, setRateTypeState] = useState<RateType>(DEFAULT_RATE_TYPE);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
@@ -209,6 +219,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     await initDatabase();
+
+    // Which series to load has to be known before the queries go out, so this
+    // one setting is read on its own rather than inside the batch below.
+    const storedRateType = await getSetting(EXCHANGE_RATE_TYPE);
+    const activeRateType = isRateType(storedRateType)
+      ? storedRateType
+      : DEFAULT_RATE_TYPE;
+
     const [
       nextTransactions,
       nextCategories,
@@ -234,8 +252,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       listInstallmentPlans(),
       listSavingsGoals(),
       listSavingsContributions(),
-      getLatestExchangeRate(),
-      listExchangeRates(),
+      getLatestExchangeRate(activeRateType),
+      listExchangeRates(activeRateType),
       getSetting(LAST_BACKUP_AT),
     ]);
     setTransactions(nextTransactions);
@@ -248,6 +266,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setInstallmentPlans(nextPlans);
     setSavingsGoals(nextGoals);
     setSavingsContributions(nextContributions);
+    setRateTypeState(activeRateType);
     setExchangeRate(cachedRate);
     setExchangeRateHistory(cachedHistory);
     setLastBackupAt(storedLastBackup);
@@ -260,7 +279,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async ({ silent = false }: { silent?: boolean } = {}) => {
       setIsRefreshingRate(true);
       try {
-        const rate = await fetchMepRate();
+        const rate = await fetchRate(rateType);
         await upsertExchangeRate(rate);
         setExchangeRate(rate);
         if (!silent) toast.success("Cotización actualizada");
@@ -273,8 +292,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setIsRefreshingRate(false);
       }
     },
-    [],
+    [rateType],
   );
+
+  // Switching rates keeps whatever was already downloaded for the new one and
+  // shows it immediately, then goes to the network. Nothing is deleted: the old
+  // series stays cached, so changing back is instant rather than another
+  // multi-thousand-record download.
+  const setRateType = useCallback(async (type: RateType) => {
+    await setSetting(EXCHANGE_RATE_TYPE, type);
+    setRateTypeState(type);
+
+    const [cachedRate, cachedHistory] = await Promise.all([
+      getLatestExchangeRate(type),
+      listExchangeRates(type),
+    ]);
+    setExchangeRate(cachedRate);
+    setExchangeRateHistory(cachedHistory);
+
+    try {
+      const rate = await fetchRate(type);
+      await upsertExchangeRate(rate);
+      setExchangeRate(rate);
+    } catch (error) {
+      // Offline is normal for a local-first app; the cached quote above stands.
+      console.error("Failed to fetch the newly selected rate:", error);
+    }
+  }, []);
 
   const recordBackup = useCallback(async () => {
     const takenAt = new Date().toISOString();
@@ -285,9 +329,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const backfillExchangeRates = useCallback(async () => {
     setIsRefreshingRate(true);
     try {
-      const history = await fetchMepRateHistory();
+      const history = await fetchRateHistory(rateType);
       const written = await upsertExchangeRates(history);
-      setExchangeRateHistory(await listExchangeRates());
+      setExchangeRateHistory(await listExchangeRates(rateType));
       toast.success(`${written} cotizaciones guardadas`);
       return written;
     } catch (error) {
@@ -297,28 +341,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsRefreshingRate(false);
     }
-  }, []);
+  }, [rateType]);
 
   // A manual correction is stored under today's date, overwriting whatever was
   // fetched for today, and is marked as such so the UI can say so.
-  const saveManualExchangeRate = useCallback(async (buy: number, sell: number) => {
-    const rate: ExchangeRate = {
-      date: todayIsoDate(),
-      buy,
-      sell,
-      source: MANUAL_RATE_SOURCE,
-      fetched_at: new Date().toISOString(),
-    };
-    try {
-      await upsertExchangeRate(rate);
-      setExchangeRate(rate);
-      toast.success("Cotización guardada");
-    } catch (error) {
-      console.error("Failed to save the manual exchange rate:", error);
-      toast.error("No se pudo guardar la cotización");
-      throw error;
-    }
-  }, []);
+  const saveManualExchangeRate = useCallback(
+    async (buy: number, sell: number) => {
+      const rate: ExchangeRate = {
+        date: todayIsoDate(),
+        rate_type: rateType,
+        buy,
+        sell,
+        source: MANUAL_RATE_SOURCE,
+        fetched_at: new Date().toISOString(),
+      };
+      try {
+        await upsertExchangeRate(rate);
+        setExchangeRate(rate);
+        toast.success("Cotización guardada");
+      } catch (error) {
+        console.error("Failed to save the manual exchange rate:", error);
+        toast.error("No se pudo guardar la cotización");
+        throw error;
+      }
+    },
+    [rateType],
+  );
 
   useEffect(() => {
     // Loading the database on mount is what an effect is for. The rule fires
@@ -382,6 +430,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       installmentPlans,
       savingsGoals,
       savingsContributions,
+      rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
@@ -389,6 +438,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       isMutating,
       isRefreshingRate,
 
+      setRateType,
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,
@@ -644,12 +694,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       installmentPlans,
       savingsGoals,
       savingsContributions,
+      rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
       isLoading,
       isMutating,
       isRefreshingRate,
+      setRateType,
       refreshExchangeRate,
       saveManualExchangeRate,
       backfillExchangeRates,

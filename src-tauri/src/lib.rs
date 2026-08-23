@@ -607,6 +607,39 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // One dollar rate was never going to be enough: the official, blue, MEP,
+        // CCL, crypto and card quotes are all real prices, and which one values
+        // a movement honestly depends on how that movement actually happened.
+        //
+        // The primary key has to widen from `date` to `(date, rate_type)`, and
+        // SQLite cannot alter a primary key in place, so the table is rebuilt.
+        // Existing rows are the MEP series that has already been downloaded —
+        // thousands of quotes back to 2018 — so they are carried over as
+        // 'bolsa' rather than discarded.
+        Migration {
+            version: 23,
+            description: "add_rate_type_to_exchange_rates",
+            sql: "
+                CREATE TABLE exchange_rates_new (
+                    date TEXT NOT NULL,
+                    rate_type TEXT NOT NULL DEFAULT 'bolsa',
+                    buy REAL NOT NULL,
+                    sell REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL,
+                    PRIMARY KEY (date, rate_type)
+                );
+
+                INSERT INTO exchange_rates_new
+                    (date, rate_type, buy, sell, source, fetched_at)
+                SELECT date, 'bolsa', buy, sell, source, fetched_at
+                FROM exchange_rates;
+
+                DROP TABLE exchange_rates;
+                ALTER TABLE exchange_rates_new RENAME TO exchange_rates;
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -712,10 +712,15 @@ export async function checkpointDatabase(): Promise<void> {
 
 // Returns the most recent cached quote, or null when none has ever been
 // stored — which is only the case before the first successful fetch.
-export async function getLatestExchangeRate(): Promise<ExchangeRate | null> {
+export async function getLatestExchangeRate(
+  rateType: string,
+): Promise<ExchangeRate | null> {
   const db = await getDb();
   const rows = await db.select<ExchangeRate[]>(
-    "SELECT * FROM exchange_rates ORDER BY date DESC LIMIT 1",
+    `SELECT * FROM exchange_rates
+     WHERE rate_type = $1
+     ORDER BY date DESC LIMIT 1`,
+    [rateType],
   );
   return rows[0] ?? null;
 }
@@ -723,6 +728,7 @@ export async function getLatestExchangeRate(): Promise<ExchangeRate | null> {
 // Keys the app stores about itself. Kept as constants so a typo cannot quietly
 // read a setting that was never written.
 export const LAST_BACKUP_AT = "last_backup_at";
+export const EXCHANGE_RATE_TYPE = "exchange_rate_type";
 
 export async function getSetting(key: string): Promise<string | null> {
   const db = await getDb();
@@ -742,13 +748,16 @@ export async function setSetting(key: string, value: string): Promise<void> {
   );
 }
 
-export async function listExchangeRates(): Promise<ExchangeRate[]> {
+export async function listExchangeRates(rateType: string): Promise<ExchangeRate[]> {
   const db = await getDb();
-  return db.select<ExchangeRate[]>("SELECT * FROM exchange_rates ORDER BY date");
+  return db.select<ExchangeRate[]>(
+    "SELECT * FROM exchange_rates WHERE rate_type = $1 ORDER BY date",
+    [rateType],
+  );
 }
 
 // Bound parameters per row, used to size the batches below.
-const EXCHANGE_RATE_COLUMNS = 5;
+const EXCHANGE_RATE_COLUMNS = 6;
 // SQLite caps how many parameters a single statement may bind. Staying well
 // under the limit keeps this working regardless of how the library was built.
 const MAX_BOUND_PARAMETERS = 900;
@@ -770,12 +779,13 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
     const placeholders = batch
       .map((_, index) => {
         const base = index * EXCHANGE_RATE_COLUMNS;
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
       })
       .join(", ");
 
     const values = batch.flatMap((rate) => [
       rate.date,
+      rate.rate_type,
       rate.buy,
       rate.sell,
       rate.source,
@@ -783,9 +793,9 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
     ]);
 
     await db.execute(
-      `INSERT INTO exchange_rates (date, buy, sell, source, fetched_at)
+      `INSERT INTO exchange_rates (date, rate_type, buy, sell, source, fetched_at)
        VALUES ${placeholders}
-       ON CONFLICT(date) DO UPDATE SET
+       ON CONFLICT(date, rate_type) DO UPDATE SET
          buy = excluded.buy,
          sell = excluded.sell,
          source = excluded.source,
@@ -805,14 +815,14 @@ export async function upsertExchangeRates(rates: ExchangeRate[]): Promise<number
 export async function upsertExchangeRate(rate: ExchangeRate): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `INSERT INTO exchange_rates (date, buy, sell, source, fetched_at)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT(date) DO UPDATE SET
+    `INSERT INTO exchange_rates (date, rate_type, buy, sell, source, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT(date, rate_type) DO UPDATE SET
        buy = excluded.buy,
        sell = excluded.sell,
        source = excluded.source,
        fetched_at = excluded.fetched_at`,
-    [rate.date, rate.buy, rate.sell, rate.source, rate.fetched_at],
+    [rate.date, rate.rate_type, rate.buy, rate.sell, rate.source, rate.fetched_at],
   );
 }
 

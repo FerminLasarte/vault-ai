@@ -201,11 +201,16 @@ export interface CategoryRuleWithCategory extends CategoryRule {
   category_type: CategoryType;
 }
 
-// One cached quote per day. `sell` is what a dollar costs to buy, and is the
-// figure used for conversions; `buy` is kept for reference and for a future
-// view that needs the spread.
+// One cached quote per day and per rate. `sell` is what a dollar costs to buy,
+// and is the figure used for conversions; `buy` is kept for reference and for a
+// future view that needs the spread.
+//
+// `rate_type` is which dollar this is — official, blue, MEP and so on. Several
+// rates can be cached side by side, so switching between them does not throw
+// away a history that took a download to build.
 export interface ExchangeRate {
   date: string;
+  rate_type: string;
   buy: number;
   sell: number;
   source: string;

@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppData } from "@/hooks/useAppData";
-import { MANUAL_RATE_SOURCE } from "@/lib/exchangeRate";
+import { MANUAL_RATE_SOURCE, RATE_TYPE_LABELS } from "@/lib/exchangeRate";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +29,13 @@ type RateFormInput = z.input<typeof rateSchema>;
 type RateFormValues = z.output<typeof rateSchema>;
 
 export function ExchangeRateBar() {
-  const { exchangeRate, isRefreshingRate, refreshExchangeRate, saveManualExchangeRate } =
-    useAppData();
+  const {
+    rateType,
+    exchangeRate,
+    isRefreshingRate,
+    refreshExchangeRate,
+    saveManualExchangeRate,
+  } = useAppData();
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -60,12 +65,15 @@ export function ExchangeRateBar() {
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
       {exchangeRate ? (
         <span>
-          Dólar MEP {formatCurrency(exchangeRate.sell, "ARS")} ·{" "}
+          Dólar {RATE_TYPE_LABELS[rateType]} {formatCurrency(exchangeRate.sell, "ARS")} ·{" "}
           {formatDate(exchangeRate.date)}
           {isManual && " · cargado a mano"}
         </span>
       ) : (
-        <span>Sin cotización todavía. Conéctate a internet o cárgala a mano.</span>
+        <span>
+          Sin cotización de {RATE_TYPE_LABELS[rateType].toLowerCase()} todavía. Conéctate
+          a internet o cárgala a mano.
+        </span>
       )}
 
       <ActionButton

@@ -11,6 +11,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { checkpointDatabase } from "@/db";
 import { useAppData } from "@/hooks/useAppData";
@@ -19,6 +27,12 @@ import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
 import { formatDate, todayIsoDate } from "@/lib/format";
+import {
+  isRateType,
+  RATE_TYPE_DESCRIPTIONS,
+  RATE_TYPE_LABELS,
+  RATE_TYPES,
+} from "@/lib/exchangeRate";
 import { backupStatus } from "@/lib/backupReminder";
 import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/context/ThemeContext";
@@ -50,6 +64,8 @@ export function SettingsView({ request }: ViewProps) {
     backfillExchangeRates,
     lastBackupAt,
     recordBackup,
+    rateType,
+    setRateType,
   } = useAppData();
   const { preference, setPreference } = useTheme();
 
@@ -302,9 +318,34 @@ export function SettingsView({ request }: ViewProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rate-type">Qué dólar usar</Label>
+            <Select
+              items={RATE_TYPE_LABELS}
+              value={rateType}
+              onValueChange={(value) => {
+                if (isRateType(value)) void setRateType(value);
+              }}
+            >
+              <SelectTrigger id="rate-type" className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {RATE_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {RATE_TYPE_DESCRIPTIONS[rateType]}
+            </p>
+          </div>
+
           <p className="text-sm text-muted-foreground">
             {exchangeRateHistory.length === 0
-              ? "Todavía no descargaste el histórico."
+              ? `Todavía no descargaste el histórico de ${RATE_TYPE_LABELS[rateType].toLowerCase()}.`
               : exchangeRateHistory.length === 1
                 ? "1 cotización guardada. Traé el histórico para valuar el pasado."
                 : `${exchangeRateHistory.length} cotizaciones guardadas, desde ${formatDate(
