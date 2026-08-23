@@ -23,6 +23,11 @@ import type {
   TransactionWithCategory,
 } from "./schema";
 
+// Deliberately still "vault-ai.db" after the app was renamed to Vault. The file
+// name is what the plugin opens; changing it would create a second, empty
+// database and leave the real one sitting untouched beside it. It is invisible
+// to the user, and renaming it would need a migration that moves real financial
+// data for no benefit.
 const DATABASE_URL = "sqlite:vault-ai.db";
 
 export interface QueryResult {

@@ -1,4 +1,4 @@
-# vault-ai
+# Vault
 
 Local-first desktop app for personal finance management, built with a Tauri (Rust) backend and a React + TypeScript frontend. All data is stored locally in SQLite — no backend server required.
 

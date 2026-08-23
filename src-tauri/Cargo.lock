@@ -4961,7 +4961,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vault-ai"
+name = "vault"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",

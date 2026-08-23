@@ -78,6 +78,7 @@ export function SettingsView({ request }: ViewProps) {
     // a trailing separator, so a template literal glues the folder and the file
     // name into one nonexistent path.
     appDataDir()
+      // Still the pre-rename file name; see the note in src/db/index.ts.
       .then((dir) => join(dir, "vault-ai.db"))
       .then(setDatabasePath)
       .catch(() => setDatabasePath(null));
@@ -87,7 +88,7 @@ export function SettingsView({ request }: ViewProps) {
     setIsWorking(true);
     try {
       const saved = await saveCsvFile(
-        `vault-ai-${todayIsoDate()}.csv`,
+        `vault-${todayIsoDate()}.csv`,
         transactionsToCsv(transactions),
       );
       if (saved) toast.success(`${transactions.length} transacciones exportadas`);
@@ -104,7 +105,7 @@ export function SettingsView({ request }: ViewProps) {
     try {
       // Without this the copy would miss whatever is still in the -wal sidecar.
       await checkpointDatabase();
-      const saved = await saveDatabaseCopy(`vault-ai-${todayIsoDate()}.db`);
+      const saved = await saveDatabaseCopy(`vault-${todayIsoDate()}.db`);
       if (saved) {
         await recordBackup();
         toast.success("Copia de seguridad guardada");

@@ -31,7 +31,7 @@ const VIEWS: [(&str, &str); 9] = [
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let about = AboutMetadata {
-        name: Some("vault-ai".into()),
+        name: Some("Vault".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         copyright: Some("© 2026 Fermín Lasarte".into()),
         ..Default::default()
@@ -47,20 +47,20 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let app_menu = Submenu::with_items(
         app,
-        "vault-ai",
+        "Vault",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("Acerca de vault-ai"), Some(about))?,
+            &PredefinedMenuItem::about(app, Some("Acerca de Vault"), Some(about))?,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, Some("Servicios"))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, Some("Ocultar vault-ai"))?,
+            &PredefinedMenuItem::hide(app, Some("Ocultar Vault"))?,
             &PredefinedMenuItem::hide_others(app, Some("Ocultar otros"))?,
             &PredefinedMenuItem::show_all(app, Some("Mostrar todo"))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, Some("Salir de vault-ai"))?,
+            &PredefinedMenuItem::quit(app, Some("Salir de Vault"))?,
         ],
     )?;
 

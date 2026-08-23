@@ -58,6 +58,7 @@ fn backup_database(app: tauri::AppHandle, destination: String) -> Result<(), Str
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
+        // Still the pre-rename file name; see the note in src/db/index.ts.
         .join("vault-ai.db");
 
     fs::copy(&source, &destination)

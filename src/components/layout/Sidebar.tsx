@@ -2,7 +2,6 @@ import {
   ChartPie,
   Landmark,
   Tags,
-  Wallet,
   ArrowLeftRight,
   Settings,
   CreditCard,
@@ -12,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VaultLogo } from "@/components/VaultLogo";
 
 export type View =
   | "statistics"
@@ -85,7 +85,9 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-screen w-16 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:w-60">
       <div className="flex items-center justify-center gap-2 px-2 py-6 sm:justify-start sm:px-6">
-        <Wallet className="size-5 shrink-0" />
+        {/* The cut-outs take the sidebar's own surface colour, so the mark
+            reads correctly against it in either theme. */}
+        <VaultLogo className="size-5 shrink-0 [--logo-cutout:var(--sidebar)]" />
         <span className="hidden font-heading text-lg font-semibold tracking-tight sm:inline">
           Vault
         </span>

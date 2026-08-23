@@ -1,5 +1,5 @@
 {
-  "name": "vault-ai",
+  "name": "vault",
   "private": true,
   "version": "0.1.0",
   "description": "Local-first personal finance manager built with Tauri and React",
@@ -20,7 +20,7 @@
     "format:check": "prettier --check .",
     "preview": "vite preview",
     "tauri": "tauri",
-    "install-app": "npm run tauri build && cp -R src-tauri/target/release/bundle/macos/vault-ai.app /Applications/",
+    "install-app": "npm run tauri build && cp -R src-tauri/target/release/bundle/macos/Vault.app /Applications/",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

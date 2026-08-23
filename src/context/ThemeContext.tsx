@@ -9,7 +9,11 @@ import {
 
 export type ThemePreference = "light" | "dark" | "system";
 
-const STORAGE_KEY = "vault-ai:theme";
+const STORAGE_KEY = "vault:theme";
+
+// The key the preference was stored under before the app was renamed. Read once
+// as a fallback so an existing install does not silently revert to "system".
+const LEGACY_STORAGE_KEY = "vault-ai:theme";
 
 export interface ThemeState {
   preference: ThemePreference;
@@ -23,7 +27,8 @@ export interface ThemeState {
 export const ThemeContext = createContext<ThemeState | null>(null);
 
 function readStoredPreference(): ThemePreference {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored =
+    localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
   return stored === "light" || stored === "dark" || stored === "system"
     ? stored
     : "system";

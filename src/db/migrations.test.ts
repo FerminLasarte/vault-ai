@@ -50,7 +50,7 @@ function query(database: string, statement: string): string {
 }
 
 beforeAll(() => {
-  workspace = mkdtempSync(join(tmpdir(), "vault-ai-migrations-"));
+  workspace = mkdtempSync(join(tmpdir(), "vault-migrations-"));
 });
 
 afterAll(() => {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vault-ai",
+  "productName": "Vault",
   "version": "0.1.0",
   "identifier": "com.ferminlasarte.vault-ai",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "vault-ai",
+        "title": "Vault",
         "width": 1180,
         "height": 800,
         "minWidth": 420,
@@ -33,6 +33,7 @@
     "longDescription": "Gestor de finanzas personales local-first: transacciones, cuentas, presupuestos, deudas y ahorros. Todos los datos viven únicamente en este equipo, en una base SQLite, sin servidor ni cuenta.",
     "icon": [
       "icons/32x32.png",
+      "icons/64x64.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",

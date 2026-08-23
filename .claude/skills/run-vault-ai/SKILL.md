@@ -1,9 +1,9 @@
 ---
 name: run-vault-ai
-description: Launch the vault-ai desktop app and verify a change end to end — running the real Tauri window, checking that migrations applied to the live SQLite database, inspecting the UI, and driving native file dialogs on macOS. Use whenever asked to run the app, screenshot it, or confirm a change works outside the test suite.
+description: Launch the Vault desktop app and verify a change end to end — running the real Tauri window, checking that migrations applied to the live SQLite database, inspecting the UI, and driving native file dialogs on macOS. Use whenever asked to run the app, screenshot it, or confirm a change works outside the test suite.
 ---
 
-# Running and verifying vault-ai
+# Running and verifying Vault
 
 Tauri v2 desktop app: Rust backend, React frontend, SQLite through
 `tauri-plugin-sql`. Verification takes three separate channels because no
@@ -64,8 +64,8 @@ checked.
 Capture just the window, not the whole screen:
 
 ```bash
-POS=$(osascript -e 'tell application "System Events" to tell process "vault-ai" to get position of window 1')
-SIZE=$(osascript -e 'tell application "System Events" to tell process "vault-ai" to get size of window 1')
+POS=$(osascript -e 'tell application "System Events" to tell process "Vault" to get position of window 1')
+SIZE=$(osascript -e 'tell application "System Events" to tell process "Vault" to get size of window 1')
 screencapture -x -R"<x>,<y>,<w>,<h>" out.png
 ```
 
@@ -86,8 +86,8 @@ a stale view or a hot reload silently moves the target, and a missed click lands
 on another app and steals focus.
 
 ```bash
-osascript -e 'tell application "System Events" to tell process "vault-ai" to set frontmost to true'
-osascript -e 'tell application "System Events" to tell process "vault-ai" to click at {X, Y}'
+osascript -e 'tell application "System Events" to tell process "Vault" to set frontmost to true'
+osascript -e 'tell application "System Events" to tell process "Vault" to click at {X, Y}'
 ```
 
 ## Driving native file dialogs
@@ -95,7 +95,7 @@ osascript -e 'tell application "System Events" to tell process "vault-ai" to cli
 Save and open panels appear as a _sheet_, not a window:
 
 ```bash
-osascript -e 'tell application "System Events" to tell process "vault-ai" to count sheets of window 1'
+osascript -e 'tell application "System Events" to tell process "Vault" to count sheets of window 1'
 ```
 
 Drive them by keyboard, which is far more reliable than clicking:
@@ -143,7 +143,7 @@ Back up before anything that migrates, since migrations that rebuild tables run
 `DROP TABLE`:
 
 ```bash
-cp ~/Library/Application\ Support/com.ferminlasarte.vault-ai/vault-ai.db ~/Desktop/vault-ai-backup.db
+cp ~/Library/Application\ Support/com.ferminlasarte.vault-ai/vault-ai.db ~/Desktop/vault-backup.db
 ```
 
 Delete any test rows written into the live database, and remove temporary copies
