@@ -38,6 +38,7 @@ import {
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
+import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
 
@@ -54,6 +55,7 @@ export function StatisticsView() {
     budgets,
     recurring,
     installmentPlans,
+    loans,
     exchangeRate,
     exchangeRateHistory,
     lastBackupAt,
@@ -71,13 +73,14 @@ export function StatisticsView() {
     [budgets, transactions],
   );
 
-  // Both kinds of pending commitment are surfaced together: two separate
-  // notices would make it easy to act on one and never notice the other.
+  // Every kind of pending commitment is surfaced together: separate notices
+  // would make it easy to act on one and never notice the others.
   const pendingCount = useMemo(
     () =>
       collectPendingRecurrences(recurring, todayIsoDate()).length +
-      collectPendingInstallments(installmentPlans, todayIsoDate()).length,
-    [recurring, installmentPlans],
+      collectPendingInstallments(installmentPlans, todayIsoDate()).length +
+      collectPendingLoanPayments(loans, todayIsoDate()).length,
+    [recurring, installmentPlans, loans],
   );
 
   // Every chart and KPI below reads from this single filtered list, so the

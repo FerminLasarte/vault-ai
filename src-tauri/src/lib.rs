@@ -640,6 +640,46 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // Loans, which the instalment plans above cannot express: they have a
+        // direction (money I owe versus money owed to me) and they can carry
+        // interest, so each payment splits into capital and interest instead of
+        // being one flat figure.
+        //
+        // Following the same principle as installment_plans, only
+        // `confirmed_count` is stored. Every payment, its due date, the split
+        // between capital and interest and the outstanding balance are derived
+        // from the loan's terms (see src/lib/loans.ts), so nothing can drift
+        // out of sync with anything else.
+        //
+        // `annual_rate` of 0 is deliberately valid and collapses the French
+        // system into equal payments — which is exactly what an interest-free
+        // loan between two people is, with no special case anywhere.
+        Migration {
+            version: 24,
+            description: "create_loans_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS loans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    direction TEXT NOT NULL
+                        CHECK (direction IN ('borrowed', 'lent')),
+                    counterparty TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    principal REAL NOT NULL CHECK (principal > 0),
+                    currency TEXT NOT NULL,
+                    annual_rate REAL NOT NULL DEFAULT 0 CHECK (annual_rate >= 0),
+                    installment_count INTEGER NOT NULL
+                        CHECK (installment_count > 0),
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    first_due_date TEXT NOT NULL,
+                    confirmed_count INTEGER NOT NULL DEFAULT 0
+                        CHECK (confirmed_count >= 0),
+                    created_at TEXT NOT NULL
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

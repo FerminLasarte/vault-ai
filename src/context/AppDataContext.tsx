@@ -10,9 +10,11 @@ import { toast } from "sonner";
 import {
   deleteAttachment,
   advanceInstallmentPlan,
+  advanceLoan,
   deleteBudget,
   deleteCategory,
   deleteInstallmentPlan,
+  deleteLoan,
   deleteSavingsContribution,
   deleteSavingsGoal,
   deleteRecurringTransaction,
@@ -28,6 +30,7 @@ import {
   insertBudget,
   insertCategory,
   insertInstallmentPlan,
+  insertLoan,
   insertSavingsContribution,
   insertSavingsGoal,
   insertRecurringTransaction,
@@ -38,6 +41,7 @@ import {
   listBudgets,
   listCategories,
   listInstallmentPlans,
+  listLoans,
   listSavingsContributions,
   listSavingsGoals,
   listExchangeRates,
@@ -52,6 +56,7 @@ import {
   markRecurringConfirmed,
   updateBudget,
   updateInstallmentPlan,
+  updateLoan,
   updateSavingsGoal,
   updateCategoryRule,
   updateRecurringTransaction,
@@ -65,8 +70,10 @@ import {
   type ExchangeRate,
   type NewAttachment,
   type InstallmentPlanWithNames,
+  type LoanWithNames,
   type NewBudget,
   type NewInstallmentPlan,
+  type NewLoan,
   type NewSavingsGoal,
   type SavingsContribution,
   type SavingsGoalWithNames,
@@ -99,6 +106,7 @@ export interface AppData {
   budgets: BudgetWithCategory[];
   recurring: RecurringTransactionWithNames[];
   installmentPlans: InstallmentPlanWithNames[];
+  loans: LoanWithNames[];
   savingsGoals: SavingsGoalWithNames[];
   savingsContributions: SavingsContribution[];
   // Latest known MEP quote, or null before the very first successful fetch.
@@ -137,6 +145,19 @@ export interface AppData {
     note: string | null,
   ) => Promise<void>;
   removeSavingsContribution: (id: number) => Promise<void>;
+
+  addLoan: (loan: NewLoan) => Promise<void>;
+  editLoan: (id: number, loan: NewLoan) => Promise<void>;
+  removeLoan: (id: number) => Promise<void>;
+  // Records the payment as a real movement and advances the loan by one, in
+  // that order, so a failure never leaves a loan claiming a payment that was
+  // never written.
+  confirmLoanPayment: (
+    id: number,
+    index: number,
+    date: string,
+    amount: number,
+  ) => Promise<void>;
 
   addInstallmentPlan: (plan: NewInstallmentPlan) => Promise<void>;
   editInstallmentPlan: (id: number, plan: NewInstallmentPlan) => Promise<void>;
@@ -205,6 +226,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [installmentPlans, setInstallmentPlans] = useState<InstallmentPlanWithNames[]>(
     [],
   );
+  const [loans, setLoans] = useState<LoanWithNames[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalWithNames[]>([]);
   const [savingsContributions, setSavingsContributions] = useState<SavingsContribution[]>(
     [],
@@ -236,6 +258,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       nextBudgets,
       nextRecurring,
       nextPlans,
+      nextLoans,
       nextGoals,
       nextContributions,
       cachedRate,
@@ -250,6 +273,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       listBudgets(),
       listRecurringTransactions(),
       listInstallmentPlans(),
+      listLoans(),
       listSavingsGoals(),
       listSavingsContributions(),
       getLatestExchangeRate(activeRateType),
@@ -264,6 +288,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setBudgets(nextBudgets);
     setRecurring(nextRecurring);
     setInstallmentPlans(nextPlans);
+    setLoans(nextLoans);
     setSavingsGoals(nextGoals);
     setSavingsContributions(nextContributions);
     setRateTypeState(activeRateType);
@@ -428,6 +453,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       budgets,
       recurring,
       installmentPlans,
+      loans,
       savingsGoals,
       savingsContributions,
       rateType,
@@ -504,6 +530,50 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           () => deleteSavingsContribution(id),
           "Aporte eliminado",
           "No se pudo eliminar el aporte",
+        ),
+
+      addLoan: (loan) =>
+        runMutation(
+          () => insertLoan(loan),
+          "Préstamo creado",
+          "No se pudo crear el préstamo",
+        ),
+      editLoan: (id, loan) =>
+        runMutation(
+          () => updateLoan(id, loan),
+          "Préstamo actualizado",
+          "No se pudo actualizar el préstamo",
+        ),
+      removeLoan: (id) =>
+        runMutation(
+          () => deleteLoan(id),
+          "Préstamo eliminado",
+          "No se pudo eliminar el préstamo",
+        ),
+      confirmLoanPayment: (id, index, date, amount) =>
+        runMutation(
+          async () => {
+            const loan = loans.find((entry) => entry.id === id);
+            if (!loan) return;
+
+            // A payment on money I owe leaves my pocket; a payment on money
+            // owed to me arrives in it. Recording both as expenses would make
+            // being repaid look like a cost.
+            await insertTransaction({
+              amount,
+              type: loan.direction === "borrowed" ? "expense" : "income",
+              currency: loan.currency,
+              categoryId: loan.category_id,
+              paymentMethodId: loan.payment_method_id,
+              destinationPaymentMethodId: null,
+              destinationAmount: null,
+              description: `${loan.description} (${index + 1}/${loan.installment_count})`,
+              date,
+            });
+            await advanceLoan(id, index + 1);
+          },
+          "Cuota registrada",
+          "No se pudo registrar la cuota",
         ),
 
       addInstallmentPlan: (plan) =>
@@ -692,6 +762,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       budgets,
       recurring,
       installmentPlans,
+      loans,
       savingsGoals,
       savingsContributions,
       rateType,

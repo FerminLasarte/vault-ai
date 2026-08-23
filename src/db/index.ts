@@ -11,6 +11,8 @@ import type {
   PaymentMethodType,
   NewTransaction,
   InstallmentPlanWithNames,
+  LoanDirection,
+  LoanWithNames,
   RecurrenceFrequencyValue,
   SavingsContribution,
   SavingsGoalWithNames,
@@ -483,6 +485,100 @@ export async function advanceInstallmentPlan(
     `UPDATE installment_plans
      SET confirmed_count = MIN($1, installment_count)
      WHERE id = $2`,
+    [confirmedCount, id],
+  );
+}
+
+export async function listLoans(): Promise<LoanWithNames[]> {
+  const db = await getDb();
+  return db.select<LoanWithNames[]>(
+    `SELECT l.*,
+            c.name AS category_name,
+            c.icon AS category_icon,
+            p.name AS payment_method_name
+     FROM loans l
+     LEFT JOIN categories c ON c.id = l.category_id
+     LEFT JOIN payment_methods p ON p.id = l.payment_method_id
+     ORDER BY l.first_due_date DESC, l.id DESC`,
+  );
+}
+
+export interface NewLoan {
+  direction: LoanDirection;
+  counterparty: string;
+  description: string;
+  principal: number;
+  currency: string;
+  annualRate: number;
+  installmentCount: number;
+  categoryId: number | null;
+  paymentMethodId: number | null;
+  firstDueDate: string;
+}
+
+export async function insertLoan(loan: NewLoan): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO loans
+       (direction, counterparty, description, principal, currency, annual_rate,
+        installment_count, category_id, payment_method_id, first_due_date,
+        created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [
+      loan.direction,
+      loan.counterparty,
+      loan.description,
+      loan.principal,
+      loan.currency,
+      loan.annualRate,
+      loan.installmentCount,
+      loan.categoryId,
+      loan.paymentMethodId,
+      loan.firstDueDate,
+      new Date().toISOString(),
+    ],
+  );
+}
+
+export async function updateLoan(id: number, loan: NewLoan): Promise<void> {
+  const db = await getDb();
+  // `confirmed_count` is deliberately left alone: editing the terms of a loan
+  // must not undo or invent payments that were already recorded.
+  await db.execute(
+    `UPDATE loans
+     SET direction = $1, counterparty = $2, description = $3, principal = $4,
+         currency = $5, annual_rate = $6, installment_count = $7,
+         category_id = $8, payment_method_id = $9, first_due_date = $10
+     WHERE id = $11`,
+    [
+      loan.direction,
+      loan.counterparty,
+      loan.description,
+      loan.principal,
+      loan.currency,
+      loan.annualRate,
+      loan.installmentCount,
+      loan.categoryId,
+      loan.paymentMethodId,
+      loan.firstDueDate,
+      id,
+    ],
+  );
+}
+
+export async function deleteLoan(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM loans WHERE id = $1", [id]);
+}
+
+// Payments are confirmed strictly in order, so the count is all that needs
+// storing. Guarded against running past the end of the schedule.
+export async function advanceLoan(id: number, confirmedCount: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE loans
+     SET confirmed_count = $1
+     WHERE id = $2 AND $1 <= installment_count AND $1 >= 0`,
     [confirmedCount, id],
   );
 }

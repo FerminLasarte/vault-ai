@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTestDatabase } from "./testing/database";
 import {
+  advanceLoan,
   countTransactionsForPaymentMethod,
   deletePaymentMethod,
   deleteTransaction,
@@ -9,22 +10,25 @@ import {
   getSetting,
   insertAttachment,
   insertCategory,
+  insertLoan,
   insertPaymentMethod,
   insertTransaction,
   insertTransactions,
   listAttachments,
   listCategories,
   listExchangeRates,
+  listLoans,
   listTags,
   listTransactionsWithCategory,
   setDatabaseForTesting,
   setSetting,
   setTransactionTags,
+  updateLoan,
   updateTransaction,
   upsertExchangeRate,
   upsertExchangeRates,
 } from "./index";
-import type { ExchangeRate, NewTransaction } from "./index";
+import type { ExchangeRate, NewLoan, NewTransaction } from "./index";
 
 let db: ReturnType<typeof createTestDatabase>;
 
@@ -357,5 +361,90 @@ describe("exchange rates", () => {
     expect((await getLatestExchangeRate("bolsa"))?.sell).toBe(1300);
     expect((await getLatestExchangeRate("blue"))?.sell).toBe(1500);
     expect(await getLatestExchangeRate("cripto")).toBeNull();
+  });
+});
+
+describe("loans", () => {
+  function aLoan(overrides: Partial<NewLoan> = {}): NewLoan {
+    return {
+      direction: "borrowed",
+      counterparty: "Banco",
+      description: "Préstamo personal",
+      principal: 1_000_000,
+      currency: "ARS",
+      annualRate: 60,
+      installmentCount: 12,
+      categoryId: null,
+      paymentMethodId: null,
+      firstDueDate: "2026-09-10",
+      ...overrides,
+    };
+  }
+
+  it("reads back a loan with its category and account", async () => {
+    const category = await anExpenseCategory("Créditos");
+    const account = await anAccount();
+
+    await insertLoan(aLoan({ categoryId: category.id, paymentMethodId: account.id }));
+
+    const [loan] = await listLoans();
+    expect(loan.counterparty).toBe("Banco");
+    expect(loan.annual_rate).toBe(60);
+    expect(loan.confirmed_count).toBe(0);
+    expect(loan.category_name).toBe("Créditos");
+    expect(loan.payment_method_name).toBe("Efectivo");
+  });
+
+  it("accepts an interest-free loan", async () => {
+    // The schema must not force a rate: a loan between two people usually has
+    // none, and rejecting it would push the user into faking one.
+    await insertLoan(aLoan({ annualRate: 0, direction: "lent", counterparty: "Martín" }));
+
+    const [loan] = await listLoans();
+    expect(loan.annual_rate).toBe(0);
+    expect(loan.direction).toBe("lent");
+  });
+
+  it("refuses a direction that means nothing", async () => {
+    await expect(
+      insertLoan(aLoan({ direction: "sideways" as NewLoan["direction"] })),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a loan with no money or no payments", async () => {
+    await expect(insertLoan(aLoan({ principal: 0 }))).rejects.toThrow();
+    await expect(insertLoan(aLoan({ installmentCount: 0 }))).rejects.toThrow();
+  });
+
+  it("keeps the payments already recorded when the terms are edited", async () => {
+    await insertLoan(aLoan());
+    const [created] = await listLoans();
+    await advanceLoan(created.id, 3);
+
+    await updateLoan(created.id, aLoan({ principal: 2_000_000 }));
+
+    const [updated] = await listLoans();
+    // Editing the terms must not silently undo three payments that happened.
+    expect(updated.principal).toBe(2_000_000);
+    expect(updated.confirmed_count).toBe(3);
+  });
+
+  it("will not advance past the end of the schedule", async () => {
+    await insertLoan(aLoan({ installmentCount: 12 }));
+    const [loan] = await listLoans();
+
+    await advanceLoan(loan.id, 13);
+
+    expect((await listLoans())[0].confirmed_count).toBe(0);
+  });
+
+  it("keeps the loan when its account is deleted", async () => {
+    const account = await anAccount("A borrar");
+    await insertLoan(aLoan({ paymentMethodId: account.id }));
+
+    await deletePaymentMethod(account.id);
+
+    const [loan] = await listLoans();
+    expect(loan.payment_method_id).toBeNull();
   });
 });

@@ -111,6 +111,37 @@ export interface InstallmentPlanWithNames extends InstallmentPlan {
   payment_method_name: string | null;
 }
 
+export type LoanDirection = "borrowed" | "lent";
+
+// A loan, in either direction. Like the instalment plans above, only
+// `confirmed_count` is stored: the schedule, the split between capital and
+// interest and the outstanding balance are all derived from the terms (see
+// src/lib/loans.ts).
+//
+// `annual_rate` of 0 is valid and makes this an interest-free loan between two
+// people, which needs no special case anywhere.
+export interface Loan {
+  id: number;
+  direction: LoanDirection;
+  counterparty: string;
+  description: string;
+  principal: number;
+  currency: string;
+  annual_rate: number;
+  installment_count: number;
+  category_id: number | null;
+  payment_method_id: number | null;
+  first_due_date: string;
+  confirmed_count: number;
+  created_at: string;
+}
+
+export interface LoanWithNames extends Loan {
+  category_name: string | null;
+  category_icon: string | null;
+  payment_method_name: string | null;
+}
+
 // A movement that repeats. Deliberately not a transaction: it only ever
 // produces proposals, which the user confirms before anything is recorded.
 export interface RecurringTransaction {
