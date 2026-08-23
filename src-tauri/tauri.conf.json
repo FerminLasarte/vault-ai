@@ -26,6 +26,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Fermín Lasarte",
+    "copyright": "© 2026 Fermín Lasarte",
+    "category": "Finance",
+    "shortDescription": "Finanzas personales, en tu equipo",
+    "longDescription": "Gestor de finanzas personales local-first: transacciones, cuentas, presupuestos, deudas y ahorros. Todos los datos viven únicamente en este equipo, en una base SQLite, sin servidor ni cuenta.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

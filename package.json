@@ -2,6 +2,13 @@
   "name": "vault-ai",
   "private": true,
   "version": "0.1.0",
+  "description": "Local-first personal finance manager built with Tauri and React",
+  "author": "Fermín Lasarte <fermin.lasarte@icloud.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FerminLasarte/vault-ai.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
