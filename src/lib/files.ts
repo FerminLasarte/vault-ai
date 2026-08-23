@@ -111,3 +111,12 @@ export async function saveAttachmentCopy(
   await invoke("write_file_base64", { path, contents: contentBase64 });
   return true;
 }
+
+// Opens the system print dialog.
+//
+// Deliberately not `window.print()`: in the macOS webview that call silently
+// does nothing — no dialog, no error — so printing has to be asked for from
+// the native side.
+export async function printWindow(): Promise<void> {
+  await invoke("print_window");
+}

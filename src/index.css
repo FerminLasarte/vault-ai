@@ -142,3 +142,47 @@
     overflow: hidden;
   }
 }
+
+/* Printing.
+
+   The window is pinned to the viewport and hides its overflow so portalled
+   elements cannot make the interface scroll (see above). On paper that same
+   rule would clip the report to one screenful, so it is undone here — a
+   printout has as many pages as it needs. */
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Everything except the report itself is interface: the sidebar, the filters,
+     the buttons. None of it belongs on paper. The report is moved out of the
+     app's flex layout so it is not constrained by a column that no longer has
+     a window to sit in. */
+  body > *:not(#root),
+  #root > div > aside,
+  #root > div > main > div > *:not(#printable-report) {
+    display: none !important;
+  }
+
+  #printable-report {
+    position: static;
+    width: 100%;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+
+  /* Ink, not screen: the app's surfaces and borders are tuned for a backlit
+     display and print as muddy grey boxes. */
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

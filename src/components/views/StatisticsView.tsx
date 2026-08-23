@@ -1,7 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { PrintableReport } from "@/components/reports/PrintableReport";
+import { buildReport } from "@/lib/report";
+import { printWindow } from "@/lib/files";
+import type { ViewProps } from "@/lib/menu";
 import { CurrencyFilter } from "@/components/CurrencyFilter";
 import {
   Select,
@@ -17,7 +22,7 @@ import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
-import { AlertTriangle, HardDriveDownload, Repeat } from "lucide-react";
+import { AlertTriangle, HardDriveDownload, Printer, Repeat } from "lucide-react";
 import {
   applyTransactionFilters,
   availableYears,
@@ -48,7 +53,7 @@ const TREND_MONTHS = 6;
 // year can collide with it.
 const ALL_YEARS = "__all__";
 
-export function StatisticsView() {
+export function StatisticsView({ request }: ViewProps) {
   const {
     transactions,
     categories,
@@ -101,6 +106,24 @@ export function StatisticsView() {
     [lastBackupAt, transactions.length],
   );
 
+  const report = useMemo(
+    () =>
+      buildReport(
+        { transactions, categories, budgets },
+        { currency, categoryId, dateRange },
+      ),
+    [transactions, categories, budgets, currency, categoryId, dateRange],
+  );
+
+  // "Imprimir informe" from the Archivo menu. A ref rather than state: which
+  // click was already handled is bookkeeping and nothing renders from it.
+  const lastRequestSeq = useRef(request?.seq ?? 0);
+  useEffect(() => {
+    if (request === null || request.seq === lastRequestSeq.current) return;
+    lastRequestSeq.current = request.seq;
+    if (request.action === "print-report") void printWindow();
+  }, [request]);
+
   const years = useMemo(() => availableYears(transactions), [transactions]);
 
   // Derived from the range rather than held separately: with its own state the
@@ -149,7 +172,18 @@ export function StatisticsView() {
       <PageHeader
         title="Estadísticas"
         description="Analiza tus finanzas con filtros combinables."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void printWindow()}>
+            <Printer />
+            Imprimir informe
+          </Button>
+        }
       />
+
+      {/* Hidden on screen and revealed only by the print stylesheet, so what is
+          printed is built from the same filters the user is looking at rather
+          than from a second set they would have to keep in sync. */}
+      <PrintableReport report={report} />
 
       {overspent.length > 0 && (
         <Card className="border-destructive/50">

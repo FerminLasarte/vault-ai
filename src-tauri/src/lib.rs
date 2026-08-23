@@ -50,6 +50,16 @@ fn write_file_base64(path: String, contents: String) -> Result<(), String> {
     fs::write(&path, bytes).map_err(|error| error.to_string())
 }
 
+// Opens the system print dialog for this window.
+//
+// `window.print()` from JavaScript is a no-op in the macOS webview — it does
+// not throw, it simply does nothing — so the only way to reach the print
+// dialog is from the native side.
+#[tauri::command]
+fn print_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|error| error.to_string())
+}
+
 // Copies the live SQLite file. The WAL is checkpointed by the caller first, so
 // what lands on disk is a complete database rather than a stale main file.
 #[tauri::command]
@@ -726,7 +736,8 @@ pub fn run() {
             read_text_file,
             read_file_base64,
             write_file_base64,
-            backup_database
+            backup_database,
+            print_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

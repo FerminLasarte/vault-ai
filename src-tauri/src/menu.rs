@@ -7,6 +7,7 @@ const NEW_TRANSACTION: &str = "new-transaction";
 const BACKUP: &str = "backup";
 const EXPORT_CSV: &str = "export-csv";
 const IMPORT_CSV: &str = "import-csv";
+const PRINT_REPORT: &str = "print-report";
 const VIEW_PREFIX: &str = "view:";
 
 // Events the frontend listens for. The menu never touches the interface
@@ -86,6 +87,14 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             )?,
             &MenuItem::with_id(app, EXPORT_CSV, "Exportar a CSV", true, None::<&str>)?,
             &MenuItem::with_id(app, IMPORT_CSV, "Importar desde CSV", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(
+                app,
+                PRINT_REPORT,
+                "Imprimir informe",
+                true,
+                Some("CmdOrCtrl+P"),
+            )?,
         ],
     )?;
 
@@ -153,7 +162,10 @@ pub fn handle_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
 
     let emitted = if let Some(view) = id.strip_prefix(VIEW_PREFIX) {
         app.emit(NAVIGATE_EVENT, view)
-    } else if matches!(id, NEW_TRANSACTION | BACKUP | EXPORT_CSV | IMPORT_CSV) {
+    } else if matches!(
+        id,
+        NEW_TRANSACTION | BACKUP | EXPORT_CSV | IMPORT_CSV | PRINT_REPORT
+    ) {
         app.emit(ACTION_EVENT, id)
     } else {
         // Predefined items (copy, quit, minimize…) are handled by the OS.
