@@ -856,6 +856,9 @@ export async function getLatestExchangeRate(
 // read a setting that was never written.
 export const LAST_BACKUP_AT = "last_backup_at";
 export const EXCHANGE_RATE_TYPE = "exchange_rate_type";
+export const NOTIFICATIONS_ENABLED = "notifications_enabled";
+// The facts already announced, as a JSON array of notification ids.
+export const NOTIFIED_IDS = "notified_ids";
 
 export async function getSetting(key: string): Promise<string | null> {
   const db = await getDb();
