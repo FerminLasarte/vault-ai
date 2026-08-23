@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { VaultLogo } from "@/components/VaultLogo";
 import { isMacOS } from "@/lib/platform";
+import type { PendingBadges } from "@/lib/pendingBadges";
 
 export type View =
   | "statistics"
@@ -52,10 +53,12 @@ const FOOTER_ITEMS = [
 interface NavButtonProps {
   item: NavItem;
   isCurrent: boolean;
+  // How many things this section is waiting on, or undefined for none.
+  pending?: number;
   onNavigate: (view: View) => void;
 }
 
-function NavButton({ item, isCurrent, onNavigate }: NavButtonProps) {
+function NavButton({ item, isCurrent, pending, onNavigate }: NavButtonProps) {
   const { view, label, icon: Icon } = item;
 
   return (
@@ -65,7 +68,7 @@ function NavButton({ item, isCurrent, onNavigate }: NavButtonProps) {
       aria-current={isCurrent ? "page" : undefined}
       onClick={() => onNavigate(view)}
       className={cn(
-        "flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors sm:justify-start sm:px-3",
+        "relative flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors sm:justify-start sm:px-3",
         isCurrent
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
@@ -73,16 +76,35 @@ function NavButton({ item, isCurrent, onNavigate }: NavButtonProps) {
     >
       <Icon className="size-4 shrink-0" />
       <span className="hidden sm:inline">{label}</span>
+
+      {pending !== undefined && (
+        <>
+          {/* Collapsed, there is no room for a number, so the dot rides on the
+              icon. Expanded, the count is worth showing: "3 cuotas vencidas" is
+              a different situation from one. */}
+          <span
+            aria-hidden
+            className="absolute top-1.5 left-1/2 size-2 translate-x-2 rounded-full bg-primary sm:hidden"
+          />
+          <span className="ml-auto hidden min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-center text-xs font-medium text-primary-foreground tabular-nums sm:inline">
+            {pending}
+          </span>
+          <span className="sr-only">
+            {pending} {pending === 1 ? "pendiente" : "pendientes"}
+          </span>
+        </>
+      )}
     </button>
   );
 }
 
 interface SidebarProps {
   currentView: View;
+  badges: PendingBadges;
   onNavigate: (view: View) => void;
 }
 
-export function Sidebar({ currentView, onNavigate }: SidebarProps) {
+export function Sidebar({ currentView, badges, onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-screen w-16 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:w-60">
       {/* On macOS the title bar is an overlay, so the traffic lights float over
@@ -108,6 +130,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
             key={item.view}
             item={item}
             isCurrent={currentView === item.view}
+            pending={badges[item.view]}
             onNavigate={onNavigate}
           />
         ))}
