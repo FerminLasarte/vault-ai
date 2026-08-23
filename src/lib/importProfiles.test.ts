@@ -1,0 +1,123 @@
+import { describe, expect, it } from "vitest";
+import {
+  findProfile,
+  parseProfiles,
+  rememberProfile,
+  statementSignature,
+} from "./importProfiles";
+import { EMPTY_MAPPING } from "./importMapping";
+import type { ColumnMapping } from "./importMapping";
+
+const MAPPING: ColumnMapping = {
+  ...EMPTY_MAPPING,
+  headerRow: 3,
+  date: 0,
+  description: 1,
+  amountLayout: "debit-credit",
+  debit: 2,
+  credit: 3,
+};
+
+const HEADER = ["Fecha", "Concepto", "Débito", "Crédito"];
+
+describe("statementSignature", () => {
+  it("ignores casing and padding, which a bank varies between exports", () => {
+    expect(statementSignature(HEADER)).toBe(
+      statementSignature(["  fecha", "CONCEPTO ", "débito", "Crédito"]),
+    );
+  });
+
+  it("tells two banks' formats apart", () => {
+    expect(statementSignature(HEADER)).not.toBe(
+      statementSignature(["Fecha", "Detalle", "Importe"]),
+    );
+  });
+});
+
+describe("parseProfiles", () => {
+  it("treats nothing stored as no profiles", () => {
+    expect(parseProfiles(null)).toEqual({});
+  });
+
+  it("treats a corrupted value as no profiles rather than failing", () => {
+    // The cost is re-doing a mapping. Throwing here would block the import.
+    expect(parseProfiles("not json")).toEqual({});
+    expect(parseProfiles("[1,2,3]")).toEqual({});
+    expect(parseProfiles("null")).toEqual({});
+  });
+});
+
+describe("rememberProfile", () => {
+  it("keeps the newest mapping for a format", () => {
+    const first = rememberProfile({}, "sig", MAPPING);
+    const second = rememberProfile(first, "sig", { ...MAPPING, date: 5 });
+
+    expect(Object.keys(second)).toHaveLength(1);
+    expect(second.sig.date).toBe(5);
+  });
+
+  it("stops growing without bound", () => {
+    let profiles = {};
+    for (let index = 0; index < 40; index++) {
+      profiles = rememberProfile(profiles, `sig-${index}`, MAPPING);
+    }
+
+    expect(Object.keys(profiles).length).toBeLessThanOrEqual(20);
+    // The most recent is the one worth keeping.
+    expect(profiles).toHaveProperty("sig-39");
+  });
+});
+
+describe("findProfile", () => {
+  const STATEMENT = [
+    ["Resumen de cuenta", "", "", ""],
+    ["Cuenta 123-456/7", "", "", ""],
+    ["", "", "", ""],
+    HEADER,
+    ["05/08/2026", "COMPRA", "1.000,00", ""],
+  ];
+
+  it("finds a mapping whose headers are not on the first row", () => {
+    // The regression this guards: the mapping was saved against the real header
+    // row but looked up against row 0, so it never matched and the user had to
+    // redo the mapping on every import.
+    const profiles = rememberProfile({}, statementSignature(HEADER), MAPPING);
+
+    const found = findProfile(profiles, STATEMENT);
+
+    expect(found).not.toBeNull();
+    expect(found?.headerRow).toBe(3);
+    expect(found?.mapping.debit).toBe(2);
+  });
+
+  it("finds one on the first row too", () => {
+    const profiles = rememberProfile({}, statementSignature(HEADER), MAPPING);
+
+    expect(findProfile(profiles, [HEADER, ["05/08/2026", "X", "1", ""]])?.headerRow).toBe(
+      0,
+    );
+  });
+
+  it("reports the row it was found on, not the row it was saved with", () => {
+    // The same bank can add or drop a preamble line between exports.
+    const profiles = rememberProfile({}, statementSignature(HEADER), MAPPING);
+
+    const found = findProfile(profiles, [["Título", "", "", ""], HEADER]);
+
+    expect(found?.headerRow).toBe(1);
+  });
+
+  it("returns nothing for a format never seen before", () => {
+    const profiles = rememberProfile({}, statementSignature(HEADER), MAPPING);
+
+    expect(findProfile(profiles, [["Fecha", "Detalle", "Importe"]])).toBeNull();
+  });
+
+  it("does not scan an entire file looking for a header", () => {
+    const profiles = rememberProfile({}, statementSignature(HEADER), MAPPING);
+    const deep = [...Array.from({ length: 30 }, () => ["", "", "", ""]), HEADER];
+
+    // A header 30 rows down is not a preamble, it is a different file.
+    expect(findProfile(profiles, deep)).toBeNull();
+  });
+});

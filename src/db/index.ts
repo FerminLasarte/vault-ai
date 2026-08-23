@@ -859,6 +859,10 @@ export const EXCHANGE_RATE_TYPE = "exchange_rate_type";
 export const NOTIFICATIONS_ENABLED = "notifications_enabled";
 // The facts already announced, as a JSON array of notification ids.
 export const NOTIFIED_IDS = "notified_ids";
+// Column mappings the user has already worked out, keyed by the header row of
+// the file they came from, so the same bank's export does not have to be mapped
+// again every month.
+export const IMPORT_PROFILES = "import_profiles";
 
 export async function getSetting(key: string): Promise<string | null> {
   const db = await getDb();

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
+import {
+  Bell,
+  CalendarClock,
+  Download,
+  HardDriveDownload,
+  Landmark,
+  Upload,
+} from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,7 +32,21 @@ import { useAppData } from "@/hooks/useAppData";
 import { useTheme } from "@/hooks/useTheme";
 import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
-import { openCsvFile, saveCsvFile, saveDatabaseCopy } from "@/lib/files";
+import {
+  openCsvFile,
+  openStatementFile,
+  saveCsvFile,
+  saveDatabaseCopy,
+} from "@/lib/files";
+import { ImportMappingDialog } from "@/components/ImportMappingDialog";
+import { EMPTY_MAPPING } from "@/lib/importMapping";
+import {
+  findProfile,
+  parseProfiles,
+  rememberProfile,
+  statementSignature,
+} from "@/lib/importProfiles";
+import { getSetting, setSetting, IMPORT_PROFILES } from "@/db";
 import { formatDate, todayIsoDate } from "@/lib/format";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import {
@@ -37,7 +58,9 @@ import {
 import { backupStatus } from "@/lib/backupReminder";
 import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/context/ThemeContext";
-import type { ImportSkip } from "@/lib/csv";
+import type { ImportSkip, ImportPlan } from "@/lib/csv";
+import type { ColumnMapping } from "@/lib/importMapping";
+import type { PickedStatement } from "@/lib/files";
 import type { ViewProps } from "@/lib/menu";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -79,6 +102,8 @@ export function SettingsView({ request }: ViewProps) {
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  const [statement, setStatement] = useState<PickedStatement | null>(null);
+  const [mapping, setMapping] = useState<ColumnMapping>(EMPTY_MAPPING);
 
   useEffect(() => {
     // `join` rather than string concatenation: appDataDir() comes back without
@@ -139,6 +164,62 @@ export function SettingsView({ request }: ViewProps) {
     } finally {
       setIsWorking(false);
     }
+  }
+
+  // Bank statements: the columns are whatever the bank chose, so the mapping is
+  // asked for rather than assumed.
+  async function handleImportStatement() {
+    setIsWorking(true);
+    setOutcome(null);
+    try {
+      const picked = await openStatementFile();
+      if (picked === null) return;
+
+      // A mapping already worked out for this bank's format is offered back, so
+      // the second import of the same export is one click. The header row is
+      // searched for rather than assumed: statements put a title and an account
+      // summary above the table.
+      const profiles = parseProfiles(await getSetting(IMPORT_PROFILES));
+      const found = findProfile(profiles, picked.rows);
+
+      setMapping(
+        found === null
+          ? { ...EMPTY_MAPPING, currency: CURRENCY_CODES[0] }
+          : { ...found.mapping, headerRow: found.headerRow },
+      );
+      setStatement(picked);
+    } catch (error) {
+      console.error("Failed to read the statement:", error);
+      toast.error("No se pudo leer el archivo");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function handleConfirmStatement(plan: ImportPlan) {
+    if (plan.ready.length > 0) {
+      await importTransactions(plan.ready);
+    }
+
+    if (statement !== null) {
+      const profiles = parseProfiles(await getSetting(IMPORT_PROFILES));
+      await setSetting(
+        IMPORT_PROFILES,
+        JSON.stringify(
+          rememberProfile(
+            profiles,
+            statementSignature(statement.rows[mapping.headerRow] ?? []),
+            mapping,
+          ),
+        ),
+      );
+    }
+
+    setOutcome({
+      imported: plan.ready.length,
+      duplicates: plan.duplicates,
+      skipped: plan.skipped,
+    });
   }
 
   async function handleImportCsv() {
@@ -323,6 +404,15 @@ export function SettingsView({ request }: ViewProps) {
               <Upload />
               Importar desde CSV
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void handleImportStatement()}
+            >
+              <Landmark />
+              Importar resumen bancario
+            </Button>
           </div>
 
           {outcome && (
@@ -418,6 +508,24 @@ export function SettingsView({ request }: ViewProps) {
           </div>
         </CardContent>
       </Card>
+
+      <ImportMappingDialog
+        statement={statement}
+        onOpenChange={(open) => {
+          if (!open) setStatement(null);
+        }}
+        mapping={mapping}
+        onMappingChange={setMapping}
+        paymentMethods={paymentMethods}
+        context={{
+          categories,
+          categoryRules,
+          accounts: paymentMethods,
+          existing: transactions,
+          supportedCurrencies: CURRENCY_CODES,
+        }}
+        onConfirm={handleConfirmStatement}
+      />
 
       <Card>
         <CardHeader>

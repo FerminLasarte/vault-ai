@@ -71,7 +71,29 @@ export function transactionsToCsv(transactions: TransactionWithCategory[]): stri
 
 // Full RFC 4180 parse: handles quoted fields containing commas, escaped
 // quotes, and newlines inside a quoted value. Returns one array per record.
-export function parseCsv(text: string): string[][] {
+// Guesses which character separates the fields.
+//
+// Argentine banks export with semicolons, because the comma is already the
+// decimal separator there. Counting occurrences outside quotes on the first
+// few lines is enough: the true delimiter appears once per column on every
+// row, and anything else appears by chance.
+export function detectDelimiter(text: string): string {
+  const sample = text.split(/\r?\n/).slice(0, 5).join("\n");
+  const candidates = [",", ";", "\t"];
+
+  let best = ",";
+  let bestCount = 0;
+  for (const candidate of candidates) {
+    const count = sample.split(candidate).length - 1;
+    if (count > bestCount) {
+      best = candidate;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+export function parseCsv(text: string, delimiter = ","): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -116,7 +138,7 @@ export function parseCsv(text: string): string[][] {
       index += 1;
       continue;
     }
-    if (char === ",") {
+    if (char === delimiter) {
       endField();
       index += 1;
       continue;
