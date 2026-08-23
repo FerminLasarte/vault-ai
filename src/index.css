@@ -127,4 +127,18 @@
   html {
     @apply font-sans;
     }
+
+  /* This is a desktop window, not a document: the page itself must never
+     scroll, only the content column inside it.
+
+     Without pinning the document to the viewport, any element a portal appends
+     to the end of <body> — tooltips, dialogs, selects all do this — extends the
+     page beyond the viewport and makes the whole layout scrollable, sidebar
+     and all, into empty space below the interface. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    }
 }
