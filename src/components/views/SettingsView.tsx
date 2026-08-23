@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarClock, Download, HardDriveDownload, Upload } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import { backupStatus } from "@/lib/backupReminder";
 import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/context/ThemeContext";
 import type { ImportSkip } from "@/lib/csv";
+import type { ViewProps } from "@/lib/menu";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "light", label: "Claro" },
@@ -36,7 +37,7 @@ interface ImportOutcome {
   skipped: ImportSkip[];
 }
 
-export function SettingsView() {
+export function SettingsView({ request }: ViewProps) {
   const {
     transactions,
     categories,
@@ -135,6 +136,37 @@ export function SettingsView() {
       setIsWorking(false);
     }
   }
+
+  // The three data entries in the Archivo menu. Each opens a native file dialog
+  // and then reads or writes a file, so unlike opening a dialog these genuinely
+  // belong in an effect.
+  //
+  // A ref rather than state: which click was already handled is bookkeeping,
+  // nothing renders from it, and holding it in state would schedule a render
+  // for every menu click on top of the one the action itself causes.
+  const lastRequestSeq = useRef(request?.seq ?? 0);
+  useEffect(() => {
+    if (request === null || request.seq === lastRequestSeq.current) return;
+    lastRequestSeq.current = request.seq;
+
+    const run =
+      request.action === "backup"
+        ? handleBackup
+        : request.action === "export-csv"
+          ? handleExportCsv
+          : request.action === "import-csv"
+            ? handleImportCsv
+            : null;
+
+    // Replaying a native menu click is a reaction to an external system, not
+    // state derived from props: the handler marks itself busy and then awaits a
+    // file dialog, so nothing cascades.
+    if (run !== null) void run();
+    // The handlers are redefined on every render and are only ever invoked in
+    // response to a new sequence number, so listing them here would re-run this
+    // on every render instead of once per menu click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
 
   const busy = isWorking || isMutating;
 

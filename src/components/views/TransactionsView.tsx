@@ -55,6 +55,7 @@ import { TRANSACTION_TYPE_LABELS } from "@/lib/labels";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { TransactionWithCategory } from "@/db";
+import type { ViewProps } from "@/lib/menu";
 
 // Rendering thousands of rows at once is what makes the table crawl; a page
 // worth of them is plenty for scanning and keeps the DOM small.
@@ -99,7 +100,7 @@ function TransferAmount({ transaction }: { transaction: TransactionWithCategory 
   );
 }
 
-export function TransactionsView() {
+export function TransactionsView({ request }: ViewProps) {
   const {
     transactions,
     categories,
@@ -176,6 +177,15 @@ export function TransactionsView() {
   function openCreateDialog() {
     setEditing(null);
     setIsFormOpen(true);
+  }
+
+  // "Nueva transacción" in the Archivo menu. Handled during render rather than
+  // from an effect because opening a dialog is pure state: an effect would let
+  // the view paint once without it and then pop it in a frame later.
+  const [lastRequestSeq, setLastRequestSeq] = useState(request?.seq ?? 0);
+  if (request !== null && request.seq !== lastRequestSeq) {
+    setLastRequestSeq(request.seq);
+    if (request.action === "new-transaction") openCreateDialog();
   }
 
   function openEditDialog(transaction: TransactionWithCategory) {

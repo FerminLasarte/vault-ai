@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod menu;
+
 // File I/O lives in Rust rather than behind the fs plugin: the plugin scopes
 // every path up front, which for a "save wherever you like" export would mean
 // granting the webview blanket access to the user's home directory. These
@@ -613,11 +615,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Restores the size and position the window was last closed at, and
+        // saves them again on exit.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:vault-ai.db", migrations())
                 .build(),
         )
+        .setup(|app| {
+            app.set_menu(menu::build(app.handle())?)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| menu::handle_event(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,
