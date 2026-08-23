@@ -45,5 +45,20 @@ export default defineConfig(() => ({
   test: {
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      // Generated primitives, type-only files and the test harness itself say
+      // nothing useful about how well the app is covered.
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/components/ui/**",
+        "src/db/testing/**",
+        "src/test/**",
+        "src/**/*.test.{ts,tsx}",
+        "src/vite-env.d.ts",
+        "src/main.tsx",
+      ],
+    },
   },
 }));

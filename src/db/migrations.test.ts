@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseMigrations } from "./testing/migrations";
 
 // The migrations are SQL strings inside Rust, so nothing type-checks them and a
 // mistake only surfaces when the app opens the database — where a single failing
@@ -12,30 +13,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // tauri-plugin-sql) enables it, but the sqlite3 CLI defaults it OFF, so running
 // these statements by hand passes migrations that fail in the real app. That
 // exact gap let a broken migration ship once; every run here enforces them.
-
-const MIGRATIONS_SOURCE = "src-tauri/src/lib.rs";
-
-interface ParsedMigration {
-  version: number;
-  description: string;
-  sql: string;
-}
-
-function parseMigrations(): ParsedMigration[] {
-  const source = readFileSync(MIGRATIONS_SOURCE, "utf8");
-  const pattern =
-    /version:\s*(\d+),\s*description:\s*"([^"]+)",\s*sql:\s*"([\s\S]*?)",\s*kind:/g;
-
-  const parsed: ParsedMigration[] = [];
-  for (const match of source.matchAll(pattern)) {
-    parsed.push({
-      version: Number(match[1]),
-      description: match[2],
-      sql: match[3],
-    });
-  }
-  return parsed;
-}
 
 let workspace: string;
 

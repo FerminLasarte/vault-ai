@@ -32,16 +32,17 @@ npm run tauri dev
 
 ## Other commands
 
-| Command               | Description                                                             |
-| --------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`         | Run only the Vite dev server (frontend in the browser, no native shell) |
-| `npm run tauri dev`   | Run the full desktop app in development mode                            |
-| `npm run tauri build` | Build the production desktop app bundle                                 |
-| `npm run build`       | Type-check and build the frontend only                                  |
-| `npm run test`        | Run the test suite (Vitest)                                             |
-| `npm run typecheck`   | Type-check without emitting output                                      |
-| `npm run lint`        | Lint with ESLint (`lint:fix` applies the automatic fixes)               |
-| `npm run format`      | Format with Prettier (`format:check` verifies without writing)          |
+| Command                 | Description                                                             |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`           | Run only the Vite dev server (frontend in the browser, no native shell) |
+| `npm run tauri dev`     | Run the full desktop app in development mode                            |
+| `npm run tauri build`   | Build the production desktop app bundle                                 |
+| `npm run build`         | Type-check and build the frontend only                                  |
+| `npm run test`          | Run the test suite (Vitest)                                             |
+| `npm run test:coverage` | Run the suite and report coverage                                       |
+| `npm run typecheck`     | Type-check without emitting output                                      |
+| `npm run lint`          | Lint with ESLint (`lint:fix` applies the automatic fixes)               |
+| `npm run format`        | Format with Prettier (`format:check` verifies without writing)          |
 
 ## Continuous integration
 

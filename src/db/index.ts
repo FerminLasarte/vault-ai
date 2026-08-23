@@ -23,22 +23,44 @@ import type {
 
 const DATABASE_URL = "sqlite:vault-ai.db";
 
-let dbPromise: Promise<Database> | null = null;
+export interface QueryResult {
+  rowsAffected: number;
+  lastInsertId?: number;
+}
+
+// The surface of the connection this module actually uses. Naming it means the
+// query functions below can run against anything that honours it — in practice
+// the plugin in the app, and an in-memory database with the same schema under
+// test (see ./testing/database).
+export interface SqlConnection {
+  select<T>(query: string, values?: unknown[]): Promise<T>;
+  execute(query: string, values?: unknown[]): Promise<QueryResult>;
+}
+
+let dbPromise: Promise<SqlConnection> | null = null;
 
 // Returns a cached connection, opening it (once) on first call. Opening the
 // connection is what triggers the Rust-side migrations (see src-tauri/src/lib.rs),
 // which create the schema and seed the default data — so by the time
 // this promise resolves, the database is fully ready.
-export function getDb(): Promise<Database> {
+export function getDb(): Promise<SqlConnection> {
   if (!dbPromise) {
     dbPromise = Database.load(DATABASE_URL);
   }
   return dbPromise;
 }
 
+// Substitutes the connection, for tests only. Without this the only way to
+// exercise these queries would be to mock the module wholesale, which asserts
+// that some SQL string was passed somewhere and proves nothing about whether
+// the SQL is correct. Pass null to restore the real connection.
+export function setDatabaseForTesting(connection: SqlConnection | null): void {
+  dbPromise = connection === null ? null : Promise.resolve(connection);
+}
+
 // Ensures the connection (and thus the Rust migrations) has run. Safe to
 // call from multiple components on mount; they all share the same promise.
-export function initDatabase(): Promise<Database> {
+export function initDatabase(): Promise<SqlConnection> {
   return getDb();
 }
 
