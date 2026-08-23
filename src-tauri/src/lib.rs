@@ -710,7 +710,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // Restores the size and position the window was last closed at, and
         // saves them again on exit.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        //
+        // Everything except the decorations: restoring those re-applies a
+        // standard title bar over the transparent one configured in
+        // tauri.conf.json, which put the native bar back on every launch and
+        // left a strip the app cannot draw into.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::DECORATIONS,
+                )
+                .build(),
+        )
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:vault-ai.db", migrations())
