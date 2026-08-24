@@ -57,20 +57,23 @@ runner by `.github/workflows/release.yml`. Pushing a `v*` tag is what triggers
 it; a manual run builds the same installers but attaches them to the run as
 artifacts instead of publishing anything.
 
-Create the draft release **before** pushing the tag:
+Write the notes for the release into `RELEASE_NOTES.md` first. The workflow
+reads that file at build time and the action copies it into `latest.json`, which
+is what an installed copy shows in Ajustes — notes added to the release page
+after the build never reach anyone who already has the app.
+
+Then create the draft release, from the same file, **before** pushing the tag:
 
 ```bash
-gh release create vX.Y.Z --draft --title "Vault vX.Y.Z" --notes-file notes.md
+gh release create vX.Y.Z --draft --title "Vault vX.Y.Z" --notes-file RELEASE_NOTES.md
 ```
 
-Two reasons, and skipping it fails in a way that is not obvious from the error.
-The repository keeps Actions on read-only by default, and the workflow raises
-itself only as far as `contents: write` — enough to upload assets to a release
-that exists, not enough to create one, so a run with no draft waiting for it
-dies at the last step with `Resource not accessible by integration`. The draft
-is also where the release notes have to live by then: the action copies them
-into `latest.json`, which is what installed copies show in Ajustes, and notes
-added after the build never reach it.
+Skipping the draft fails in a way the error does not explain. The repository
+keeps Actions on read-only by default, and the workflow raises itself only as
+far as `contents: write` — enough to upload assets to a release that exists, not
+enough to create one, so a run with no draft waiting for it dies at the last
+step with `Resource not accessible by integration`. The action never rewrites
+the body of a draft, so the notes put there survive the run.
 
 Then:
 
@@ -86,6 +89,10 @@ Then:
 Bumping the version means all four of `package.json`, `src-tauri/tauri.conf.json`,
 `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`. The tag does not set it; the
 one baked into the installers comes from these files.
+
+A manual run builds the same installers and hands them back as run artifacts,
+without touching any release — which makes it the way to try a change to this
+workflow before a real release depends on it.
 
 ### Updater signing
 
