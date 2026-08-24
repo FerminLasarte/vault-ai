@@ -5,22 +5,15 @@ version: `release.yml` reads it at build time and the action copies it into
 the release page afterwards never reach anyone who already has the app.
 -->
 
-## Correcciones
+## Qué cambia
 
-- **Cuentas**: la columna de importes quedaba torcida. El saldo de cada fila
-  aparecía a una distancia distinta según el largo del nombre de la cuenta, así
-  que la lista se leía desprolija. Ahora los importes quedan alineados a la
-  derecha, en una sola vertical, y el nombre se recorta en vez de desbordar
-  cuando la ventana es angosta.
+Nada dentro de la app: es idéntica a la 1.0.1. Si ya la tenés funcionando, no
+vas a notar ninguna diferencia y no hay nada que hacer.
 
-## Actualizaciones automáticas
-
-Vault se actualiza sola. Al abrirla comprueba si hay una versión nueva y te la
-ofrece; se descarga, se instala y la app se reinicia. Cada paquete viene firmado
-y la app rechaza cualquier actualización cuya firma no coincida.
-
-Si ya tenés Vault instalada, no hace falta que descargues nada de acá: abrí la
-app y te va a avisar.
+Lo que cambió es cómo se compilan y publican las versiones. Las notas de cada
+release ahora viajan junto al código, así que a partir de ahora vas a poder leer
+acá mismo, y también en Ajustes → Actualizaciones, qué trae cada versión antes
+de instalarla.
 
 ## Instalación
 
