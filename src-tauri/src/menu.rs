@@ -8,6 +8,7 @@ const BACKUP: &str = "backup";
 const EXPORT_CSV: &str = "export-csv";
 const IMPORT_CSV: &str = "import-csv";
 const PRINT_REPORT: &str = "print-report";
+const CHECK_UPDATES: &str = "check-updates";
 const VIEW_PREFIX: &str = "view:";
 
 // Events the frontend listens for. The menu never touches the interface
@@ -52,6 +53,13 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some("Acerca de Vault"), Some(about))?,
+            &MenuItem::with_id(
+                app,
+                CHECK_UPDATES,
+                "Buscar actualizaciones...",
+                true,
+                None::<&str>,
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &PredefinedMenuItem::separator(app)?,
@@ -164,7 +172,7 @@ pub fn handle_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         app.emit(NAVIGATE_EVENT, view)
     } else if matches!(
         id,
-        NEW_TRANSACTION | BACKUP | EXPORT_CSV | IMPORT_CSV | PRINT_REPORT
+        NEW_TRANSACTION | BACKUP | EXPORT_CSV | IMPORT_CSV | PRINT_REPORT | CHECK_UPDATES
     ) {
         app.emit(ACTION_EVENT, id)
     } else {

@@ -17,6 +17,7 @@ import { AppDataProvider } from "@/context/AppDataContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { AppErrorFallback, ViewErrorFallback } from "@/components/ErrorFallback";
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { MENU_ACTION_VIEW } from "@/lib/menu";
@@ -102,6 +103,7 @@ function App() {
                 </ErrorBoundary>
               </main>
             </div>
+            <UpdatePrompt />
             <Toaster position="bottom-right" />
           </AppDataProvider>
         </TooltipProvider>
