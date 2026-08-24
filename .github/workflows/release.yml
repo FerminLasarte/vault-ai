@@ -58,7 +58,21 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+      # The notes travel with the tag instead of being typed into the release
+      # form: the action copies this value into latest.json, and that is what an
+      # installed copy shows in Ajustes. Notes added to the release page after
+      # the build never reach anyone who already has the app.
+      - name: Read the release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            cat RELEASE_NOTES.md
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signs the update packages. Installed copies refuse any update that
@@ -72,23 +86,19 @@ jobs:
           # run artifacts instead of a release named after a branch.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: ${{ github.ref_type == 'tag' && format('Vault {0}', github.ref_name) || '' }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           # A draft, so the release can be checked before anyone downloads it.
+          # The action leaves the body of a draft alone, so the notes written
+          # when the draft was created survive this run untouched.
           releaseDraft: true
           prerelease: false
           # The manifest installed copies poll to discover a new version. It is
           # attached to the release, so publishing the draft is what actually
           # offers the update to everyone.
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
+          # A manual run has no tag and therefore no release to attach anything
+          # to, so the installers come back as run artifacts instead. The action
+          # has its own uploader for this, which is why there is no separate
+          # upload-artifact step.
+          uploadWorkflowArtifacts: ${{ github.event_name == 'workflow_dispatch' }}
           args: ${{ matrix.args }}
-
-      # workflow_dispatch has no tag to attach a release to, so the installers
-      # are published as run artifacts instead.
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        if: github.event_name == 'workflow_dispatch'
-        with:
-          name: vault-${{ matrix.platform }}
-          path: |
-            src-tauri/target/**/release/bundle/**/*.dmg
-            src-tauri/target/**/release/bundle/**/*.msi
-            src-tauri/target/**/release/bundle/**/*.exe
-          if-no-files-found: error
