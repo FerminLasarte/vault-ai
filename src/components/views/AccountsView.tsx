@@ -212,9 +212,13 @@ export function AccountsView() {
               {paymentMethods.map((method) => (
                 <li
                   key={method.id}
-                  className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0"
+                  className="flex items-center gap-4 border-b border-border py-3 last:border-0"
                 >
-                  <div className="flex min-w-0 flex-col gap-1">
+                  {/* The name column takes the slack rather than the row
+                      distributing it: with `justify-between` the amount sat
+                      wherever each account name happened to end, so the column
+                      came out ragged from one row to the next. */}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="truncate text-sm font-medium">{method.name}</span>
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="secondary">
@@ -226,7 +230,7 @@ export function AccountsView() {
 
                   <span
                     className={cn(
-                      "shrink-0 text-sm font-medium tabular-nums",
+                      "shrink-0 text-right text-sm font-medium tabular-nums",
                       (balances.get(method.id) ?? 0) < 0 &&
                         "text-red-600 dark:text-red-400",
                     )}
