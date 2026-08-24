@@ -12,6 +12,7 @@ export const MENU_ACTIONS = [
   "export-csv",
   "import-csv",
   "print-report",
+  "check-updates",
 ] as const;
 
 export type MenuAction = (typeof MENU_ACTIONS)[number];
@@ -24,6 +25,7 @@ export const MENU_ACTION_VIEW: Record<MenuAction, View> = {
   "export-csv": "settings",
   "import-csv": "settings",
   "print-report": "statistics",
+  "check-updates": "settings",
 };
 
 export function isMenuAction(value: unknown): value is MenuAction {

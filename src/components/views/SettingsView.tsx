@@ -5,9 +5,11 @@ import {
   Download,
   HardDriveDownload,
   Landmark,
+  RefreshCw,
   Upload,
 } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +32,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { checkpointDatabase } from "@/db";
 import { useAppData } from "@/hooks/useAppData";
 import { useTheme } from "@/hooks/useTheme";
+import { useUpdater } from "@/hooks/useUpdater";
 import { buildImportPlan, parseCsv, transactionsToCsv } from "@/lib/csv";
 import { CURRENCY_CODES } from "@/lib/currency";
 import {
@@ -94,8 +97,10 @@ export function SettingsView({ request }: ViewProps) {
     setNotificationsEnabled,
   } = useAppData();
   const { preference, setPreference } = useTheme();
+  const updater = useUpdater();
 
   const [databasePath, setDatabasePath] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   // null while unknown; the app cannot notify at all if macOS says no, and
   // saying so is the difference between a setting that looks broken and one
   // that explains itself.
@@ -114,6 +119,12 @@ export function SettingsView({ request }: ViewProps) {
       .then((dir) => join(dir, "vault-ai.db"))
       .then(setDatabasePath)
       .catch(() => setDatabasePath(null));
+  }, []);
+
+  useEffect(() => {
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(null));
   }, []);
 
   useEffect(() => {
@@ -277,7 +288,9 @@ export function SettingsView({ request }: ViewProps) {
           ? handleExportCsv
           : request.action === "import-csv"
             ? handleImportCsv
-            : null;
+            : request.action === "check-updates"
+              ? updater.check
+              : null;
 
     // Replaying a native menu click is a reaction to an external system, not
     // state derived from props: the handler marks itself busy and then awaits a
@@ -526,6 +539,73 @@ export function SettingsView({ request }: ViewProps) {
         }}
         onConfirm={handleConfirmStatement}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Actualizaciones</CardTitle>
+          <CardDescription>
+            Vault busca una versión nueva cada vez que la abrís. La descarga viene
+            firmada: si la firma no coincide con la de esta app, no se instala.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Versión instalada: {appVersion ?? "desconocida"}
+          </p>
+
+          {updater.status === "current" && (
+            <p className="text-sm text-muted-foreground">Estás en la última versión.</p>
+          )}
+
+          {updater.status === "available" && updater.update !== null && (
+            <div className="flex flex-col gap-1">
+              <p className="text-sm">
+                Vault {updater.update.version} ya está disponible.
+              </p>
+              {updater.update.notes !== undefined && (
+                <p className="text-xs whitespace-pre-line text-muted-foreground">
+                  {updater.update.notes}
+                </p>
+              )}
+            </div>
+          )}
+
+          {updater.status === "downloading" && (
+            <p className="text-sm text-muted-foreground">
+              {updater.progress === null
+                ? "Descargando..."
+                : `Descargando... ${Math.round(updater.progress * 100)}%`}
+            </p>
+          )}
+
+          {updater.error !== null && (
+            <p className="text-sm text-destructive">{updater.error}</p>
+          )}
+
+          <div>
+            {updater.status === "available" ? (
+              <Button type="button" onClick={() => void updater.install()}>
+                <HardDriveDownload />
+                Instalar y reiniciar
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  updater.status === "checking" || updater.status === "downloading"
+                }
+                onClick={() => void updater.check()}
+              >
+                <RefreshCw />
+                {updater.status === "checking"
+                  ? "Comprobando..."
+                  : "Buscar actualizaciones"}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

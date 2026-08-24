@@ -715,10 +715,11 @@ fn migrations() -> Vec<Migration> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init())
         // Restores the size and position the window was last closed at, and
         // saves them again on exit.
         //
@@ -751,7 +752,13 @@ pub fn run() {
             write_file_base64,
             backup_database,
             print_window
-        ])
+        ]);
+
+    // Desktop only, because the updater crate is not built for mobile targets.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

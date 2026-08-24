@@ -1,6 +1,6 @@
 [package]
 name = "vault"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local-first personal finance manager"
 authors = ["Fermín Lasarte <fermin.lasarte@icloud.com>"]
 license = "MIT"
@@ -29,4 +29,11 @@ tauri-plugin-dialog = "2.7.2"
 base64 = "0.23.1"
 tauri-plugin-window-state = "2.4.1"
 tauri-plugin-notification = "2.3.3"
+# Used by the updater flow to relaunch the app once the new version is in place.
+tauri-plugin-process = "2"
+
+# The updater does not build for mobile, and Tauri gates it by target for
+# exactly that reason.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
 
