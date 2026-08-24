@@ -66,9 +66,13 @@ jobs:
         id: notes
         shell: bash
         run: |
+          # The HTML comment at the top of the file is a note to whoever
+          # edits it, and Markdown hides it on the release page -- but the
+          # card in Ajustes renders these notes as plain text, where it would
+          # show up verbatim. Strip it, along with the blank lines it leaves.
           {
             echo 'body<<RELEASE_NOTES_EOF'
-            cat RELEASE_NOTES.md
+            sed '/<!--/,/-->/d' RELEASE_NOTES.md | sed '/./,$!d'
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 
