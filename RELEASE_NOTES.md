@@ -5,15 +5,16 @@ version: `release.yml` reads it at build time and the action copies it into
 the release page afterwards never reach anyone who already has the app.
 -->
 
-## Qué cambia
+## Novedades
 
-Nada dentro de la app: es idéntica a la 1.0.1. Si ya la tenés funcionando, no
-vas a notar ninguna diferencia y no hay nada que hacer.
+- **Logo nuevo**, en toda la app y en el ícono del escritorio.
 
-Lo que cambió es cómo se compilan y publican las versiones. Las notas de cada
-release ahora viajan junto al código, así que a partir de ahora vas a poder leer
-acá mismo, y también en Ajustes → Actualizaciones, qué trae cada versión antes
-de instalarla.
+  El ícono ahora va sobre una placa blanca redondeada. El anterior era una marca
+  sin fondo, que se veía bien en un dock claro pero casi desaparecía en uno
+  oscuro. Así se lee igual en los dos.
+
+  Dentro de la app el logo sigue adaptándose al tema: negro sobre blanco en modo
+  claro, blanco sobre negro en oscuro.
 
 ## Instalación
 
