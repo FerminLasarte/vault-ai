@@ -14,8 +14,11 @@ on:
 # and ship in the binaries users download. The trailing comment records
 # which release each SHA corresponds to.
 
-# The only write the run needs is creating the draft release and its
-# assets. Everything else stays denied.
+# Uploading the assets is the only write the run needs, because the draft
+# release is created by hand beforehand -- see "Releasing" in the README. The
+# repository keeps Actions read-only by default and this raises it no further
+# than it has to, so a run with no draft waiting for it fails at the last step
+# with `Resource not accessible by integration` rather than creating one.
 permissions:
   contents: write
 
