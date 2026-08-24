@@ -50,6 +50,50 @@ Every push and pull request runs `.github/workflows/ci.yml`: type check, lint,
 format check and the test suite for the frontend, plus `cargo fmt` and
 `cargo clippy` for the Rust side.
 
+## Releasing
+
+Tauri cannot cross-compile, so the Windows installer is built on a Windows
+runner by `.github/workflows/release.yml`. Pushing a `v*` tag is what triggers
+it; a manual run builds the same installers but attaches them to the run as
+artifacts instead of publishing anything.
+
+Create the draft release **before** pushing the tag:
+
+```bash
+gh release create vX.Y.Z --draft --title "Vault vX.Y.Z" --notes-file notes.md
+```
+
+Two reasons, and skipping it fails in a way that is not obvious from the error.
+The repository keeps Actions on read-only by default, and the workflow raises
+itself only as far as `contents: write` — enough to upload assets to a release
+that exists, not enough to create one, so a run with no draft waiting for it
+dies at the last step with `Resource not accessible by integration`. The draft
+is also where the release notes have to live by then: the action copies them
+into `latest.json`, which is what installed copies show in Ajustes, and notes
+added after the build never reach it.
+
+Then:
+
+1. `git tag vX.Y.Z && git push origin vX.Y.Z`
+2. Wait for both jobs (~8 minutes).
+3. Check the assets: both installers, `latest.json`, and a `.sig` beside every
+   updater package. A missing `.sig` means the signing key never reached the
+   build, and updates would be refused by every installed copy.
+4. Install the build and confirm it runs.
+5. Publish the draft. Until then the updater endpoint 404s and nobody, not even
+   an installed copy, can see the new version.
+
+Bumping the version means all four of `package.json`, `src-tauri/tauri.conf.json`,
+`src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`. The tag does not set it; the
+one baked into the installers comes from these files.
+
+### Updater signing
+
+`TAURI_SIGNING_PRIVATE_KEY` is a repository secret and its public half lives in
+`src-tauri/tauri.conf.json`. The public half is baked into every copy that ships,
+and it cannot be changed remotely afterwards — losing the private key means
+losing the ability to update any copy already installed, permanently.
+
 ## Project structure
 
 - `src/components` — React components (`src/components/ui` holds shadcn-generated primitives)
