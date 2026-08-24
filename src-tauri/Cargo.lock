@@ -5366,7 +5366,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "base64 0.23.1",
  "serde",
