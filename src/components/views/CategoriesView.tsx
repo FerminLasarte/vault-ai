@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Pencil, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -95,28 +96,23 @@ export function CategoriesView({ tab }: ViewProps) {
         </TabsList>
 
         <TabsContent value="categories" className="flex flex-col gap-6 pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Organiza tus ingresos y gastos.
-            </p>
-            <Button type="button" onClick={openCreateDialog}>
-              <Plus />
-              Nueva categoría
-            </Button>
-          </div>
+          <SectionIntro
+            description="Organiza tus ingresos y gastos."
+            actionLabel="Nueva categoría"
+            onAction={openCreateDialog}
+          />
 
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : categories.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-start gap-3 py-6">
-                <p className="text-sm text-muted-foreground">
-                  Todavía no tienes categorías.
-                </p>
-                <Button type="button" variant="outline" onClick={openCreateDialog}>
-                  <Plus />
-                  Agregar la primera
-                </Button>
+              <CardContent>
+                <EmptyState
+                  message="Todavía no tienes categorías."
+                  actionLabel="Agregar la primera"
+                  onAction={openCreateDialog}
+                  className="py-2"
+                />
               </CardContent>
             </Card>
           ) : (

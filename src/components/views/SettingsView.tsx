@@ -5,12 +5,14 @@ import {
   Download,
   HardDriveDownload,
   Landmark,
+  MessageSquarePlus,
   RefreshCw,
   Upload,
 } from "lucide-react";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
+import { SuggestionDialog } from "@/components/SuggestionDialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -99,6 +101,7 @@ export function SettingsView({ request }: ViewProps) {
   const { preference, setPreference } = useTheme();
   const updater = useUpdater();
 
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const [databasePath, setDatabasePath] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   // null while unknown; the app cannot notify at all if macOS says no, and
@@ -609,6 +612,27 @@ export function SettingsView({ request }: ViewProps) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Sugerencias</CardTitle>
+          <CardDescription>
+            Contame qué te falta o qué no funciona. Escribís acá mismo y se abre tu
+            programa de correo con el mensaje listo: nada sale de este equipo sin que vos
+            lo mandes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsSuggestionOpen(true)}
+          >
+            <MessageSquarePlus />
+            Escribir una sugerencia
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Base de datos</CardTitle>
           <CardDescription>Ubicación del archivo en este equipo.</CardDescription>
         </CardHeader>
@@ -618,6 +642,12 @@ export function SettingsView({ request }: ViewProps) {
           </p>
         </CardContent>
       </Card>
+
+      <SuggestionDialog
+        open={isSuggestionOpen}
+        onOpenChange={setIsSuggestionOpen}
+        version={appVersion}
+      />
     </div>
   );
 }

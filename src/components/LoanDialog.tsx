@@ -1,16 +1,8 @@
-import { useEffect, useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo } from "react";
+import { Controller } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
+import { useDialogForm } from "@/hooks/useDialogForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -88,32 +80,26 @@ export function LoanDialog({
     register,
     handleSubmit,
     watch,
-    reset,
     formState: { errors, isSubmitting },
-  } = useForm<LoanFormInput, unknown, LoanFormValues>({
-    resolver: zodResolver(loanSchema),
+  } = useDialogForm<LoanFormInput, LoanFormValues>({
+    schema: loanSchema,
+    open,
     defaultValues: EMPTY_LOAN,
+    values: editing
+      ? {
+          direction: editing.direction,
+          counterparty: editing.counterparty,
+          description: editing.description,
+          principal: editing.principal,
+          currency: editing.currency,
+          annualRate: editing.annual_rate,
+          installmentCount: editing.installment_count,
+          categoryId: editing.category_id,
+          paymentMethodId: editing.payment_method_id,
+          firstDueDate: editing.first_due_date,
+        }
+      : EMPTY_LOAN,
   });
-
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      editing
-        ? {
-            direction: editing.direction,
-            counterparty: editing.counterparty,
-            description: editing.description,
-            principal: editing.principal,
-            currency: editing.currency,
-            annualRate: editing.annual_rate,
-            installmentCount: editing.installment_count,
-            categoryId: editing.category_id,
-            paymentMethodId: editing.payment_method_id,
-            firstDueDate: editing.first_due_date,
-          }
-        : EMPTY_LOAN,
-    );
-  }, [open, editing, reset]);
 
   const principal = Number(watch("principal")) || 0;
   const annualRate = Number(watch("annualRate")) || 0;
@@ -164,251 +150,234 @@ export function LoanDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar préstamo" : "Nuevo préstamo"}</DialogTitle>
-          <DialogDescription>
-            Cada cuota se propone en su mes y se registra cuando la confirmes. Con tasa 0
-            las cuotas son todas iguales.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-direction">Tipo</Label>
-            <Controller
-              control={control}
-              name="direction"
-              render={({ field }) => (
-                <Select
-                  items={LOAN_DIRECTION_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => value && field.onChange(value)}
-                >
-                  <SelectTrigger id="loan-direction" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(LOAN_DIRECTION_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-counterparty">
-              {direction === "borrowed" ? "Le debo a" : "Me debe"}
-            </Label>
-            <Input
-              id="loan-counterparty"
-              placeholder="Ej. Banco Nación, Martín"
-              {...register("counterparty")}
-            />
-            {errors.counterparty && (
-              <p className="text-xs text-destructive">{errors.counterparty.message}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="loan-description">Descripción</Label>
-            <Input
-              id="loan-description"
-              placeholder="Ej. Préstamo personal"
-              {...register("description")}
-            />
-            {errors.description && (
-              <p className="text-xs text-destructive">{errors.description.message}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-principal">Capital</Label>
-            <Input
-              id="loan-principal"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              {...register("principal")}
-            />
-            {errors.principal && (
-              <p className="text-xs text-destructive">{errors.principal.message}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-rate">Tasa anual (TNA %)</Label>
-            <Input
-              id="loan-rate"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0"
-              {...register("annualRate")}
-            />
-            {errors.annualRate && (
-              <p className="text-xs text-destructive">{errors.annualRate.message}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-count">Cantidad de cuotas</Label>
-            <Input
-              id="loan-count"
-              type="number"
-              step="1"
-              min="1"
-              {...register("installmentCount")}
-            />
-            {errors.installmentCount && (
-              <p className="text-xs text-destructive">
-                {errors.installmentCount.message}
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-currency">Moneda</Label>
-            <Controller
-              control={control}
-              name="currency"
-              render={({ field }) => (
-                <Select
-                  items={CURRENCY_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => value && field.onChange(value)}
-                >
-                  <SelectTrigger id="loan-currency" className="w-full">
-                    <SelectValue placeholder="Selecciona una moneda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          {preview && (
-            <div className="flex flex-col gap-1 rounded-lg border border-border p-3 sm:col-span-2">
-              <p className="text-sm">
-                {count} {count === 1 ? "cuota" : "cuotas"} de{" "}
-                <span className="font-medium">
-                  {formatCurrency(preview.payment, currency)}
-                </span>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {preview.interest === 0
-                  ? "Sin interés: se devuelve exactamente el capital."
-                  : `Interés total ${formatCurrency(preview.interest, currency)} · ${
-                      direction === "borrowed" ? "vas a pagar" : "vas a cobrar"
-                    } ${formatCurrency(preview.cost, currency)} en total.`}
-              </p>
-            </div>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? "Editar préstamo" : "Nuevo préstamo"}
+      description="Cada cuota se propone en su mes y se registra cuando la confirmes. Con tasa 0 las cuotas son todas iguales."
+      className="sm:max-w-lg"
+      layout="grid"
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isSubmitting}
+    >
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-direction">Tipo</Label>
+        <Controller
+          control={control}
+          name="direction"
+          render={({ field }) => (
+            <Select
+              items={LOAN_DIRECTION_LABELS}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger id="loan-direction" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(LOAN_DIRECTION_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-category">Categoría</Label>
-            <Controller
-              control={control}
-              name="categoryId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    relevantCategories.map((category) => [
-                      String(category.id),
-                      category.name,
-                    ]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                >
-                  <SelectTrigger id="loan-category" className="w-full">
-                    <SelectValue placeholder="Sin categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {relevantCategories.map((category) => (
-                      <SelectItem key={category.id} value={String(category.id)}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-counterparty">
+          {direction === "borrowed" ? "Le debo a" : "Me debe"}
+        </Label>
+        <Input
+          id="loan-counterparty"
+          placeholder="Ej. Banco Nación, Martín"
+          {...register("counterparty")}
+        />
+        {errors.counterparty && (
+          <p className="text-xs text-destructive">{errors.counterparty.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="loan-description">Descripción</Label>
+        <Input
+          id="loan-description"
+          placeholder="Ej. Préstamo personal"
+          {...register("description")}
+        />
+        {errors.description && (
+          <p className="text-xs text-destructive">{errors.description.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-principal">Capital</Label>
+        <Input
+          id="loan-principal"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          {...register("principal")}
+        />
+        {errors.principal && (
+          <p className="text-xs text-destructive">{errors.principal.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-rate">Tasa anual (TNA %)</Label>
+        <Input
+          id="loan-rate"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0"
+          {...register("annualRate")}
+        />
+        {errors.annualRate && (
+          <p className="text-xs text-destructive">{errors.annualRate.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-count">Cantidad de cuotas</Label>
+        <Input
+          id="loan-count"
+          type="number"
+          step="1"
+          min="1"
+          {...register("installmentCount")}
+        />
+        {errors.installmentCount && (
+          <p className="text-xs text-destructive">{errors.installmentCount.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-currency">Moneda</Label>
+        <Controller
+          control={control}
+          name="currency"
+          render={({ field }) => (
+            <Select
+              items={CURRENCY_LABELS}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger id="loan-currency" className="w-full">
+                <SelectValue placeholder="Selecciona una moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      {preview && (
+        <div className="flex flex-col gap-1 rounded-lg border border-border p-3 sm:col-span-2">
+          <p className="text-sm">
+            {count} {count === 1 ? "cuota" : "cuotas"} de{" "}
+            <span className="font-medium">
+              {formatCurrency(preview.payment, currency)}
+            </span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {preview.interest === 0
+              ? "Sin interés: se devuelve exactamente el capital."
+              : `Interés total ${formatCurrency(preview.interest, currency)} · ${
+                  direction === "borrowed" ? "vas a pagar" : "vas a cobrar"
+                } ${formatCurrency(preview.cost, currency)} en total.`}
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-category">Categoría</Label>
+        <Controller
+          control={control}
+          name="categoryId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                relevantCategories.map((category) => [
+                  String(category.id),
+                  category.name,
+                ]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger id="loan-category" className="w-full">
+                <SelectValue placeholder="Sin categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {relevantCategories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.icon} {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="loan-account">Cuenta</Label>
-            <Controller
-              control={control}
-              name="paymentMethodId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    availableAccounts.map((method) => [String(method.id), method.name]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                  disabled={availableAccounts.length === 0}
-                >
-                  <SelectTrigger id="loan-account" className="w-full">
-                    <SelectValue placeholder="Sin cuenta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableAccounts.map((method) => (
-                      <SelectItem key={method.id} value={String(method.id)}>
-                        {method.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="loan-account">Cuenta</Label>
+        <Controller
+          control={control}
+          name="paymentMethodId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                availableAccounts.map((method) => [String(method.id), method.name]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+              disabled={availableAccounts.length === 0}
+            >
+              <SelectTrigger id="loan-account" className="w-full">
+                <SelectValue placeholder="Sin cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAccounts.map((method) => (
+                  <SelectItem key={method.id} value={String(method.id)}>
+                    {method.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="loan-first-due">Primera cuota</Label>
-            <Controller
-              control={control}
-              name="firstDueDate"
-              render={({ field }) => (
-                <DatePicker
-                  id="loan-first-due"
-                  value={field.value}
-                  onChange={field.onChange}
-                  className="w-full"
-                />
-              )}
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="loan-first-due">Primera cuota</Label>
+        <Controller
+          control={control}
+          name="firstDueDate"
+          render={({ field }) => (
+            <DatePicker
+              id="loan-first-due"
+              value={field.value}
+              onChange={field.onChange}
+              className="w-full"
             />
-            {errors.firstDueDate && (
-              <p className="text-xs text-destructive">{errors.firstDueDate.message}</p>
-            )}
-          </div>
-
-          <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+        />
+        {errors.firstDueDate && (
+          <p className="text-xs text-destructive">{errors.firstDueDate.message}</p>
+        )}
+      </div>
+    </FormDialog>
   );
 }

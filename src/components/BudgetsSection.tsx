@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
+import { SectionIntro } from "@/components/SectionIntro";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,7 +21,6 @@ import { useAppData } from "@/hooks/useAppData";
 import { calculateBudgetProgress } from "@/lib/finance";
 import { formatCurrency } from "@/lib/format";
 import { BUDGET_PERIOD_LABELS } from "@/lib/labels";
-import { cn } from "@/lib/utils";
 import type { BudgetWithCategory, NewBudget } from "@/db";
 
 export function BudgetsSection() {
@@ -70,19 +71,12 @@ export function BudgetsSection() {
   return (
     <div className="flex flex-col gap-6">
       {/* This screen's page header, demoted to the tab's own intro row. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Topes de gasto por categoría, mensuales o anuales.
-        </p>
-        <Button
-          type="button"
-          disabled={expenseCategories.length === 0}
-          onClick={openCreate}
-        >
-          <Plus />
-          Nuevo presupuesto
-        </Button>
-      </div>
+      <SectionIntro
+        description="Topes de gasto por categoría, mensuales o anuales."
+        actionLabel="Nuevo presupuesto"
+        onAction={openCreate}
+        disabled={expenseCategories.length === 0}
+      />
 
       <Card>
         <CardHeader>
@@ -92,20 +86,12 @@ export function BudgetsSection() {
           {isLoading ? (
             <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
           ) : progress.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 py-4">
-              <p className="text-sm text-muted-foreground">
-                Todavía no definiste ningún presupuesto.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={expenseCategories.length === 0}
-                onClick={openCreate}
-              >
-                <Plus />
-                Crear el primero
-              </Button>
-            </div>
+            <EmptyState
+              message="Todavía no definiste ningún presupuesto."
+              actionLabel="Crear el primero"
+              onAction={openCreate}
+              disabled={expenseCategories.length === 0}
+            />
           ) : (
             <ul className="flex flex-col gap-5">
               {progress.map((entry) => (
@@ -157,17 +143,10 @@ export function BudgetsSection() {
                     </div>
                   </div>
 
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-[width]",
-                        entry.isExceeded ? "bg-destructive" : "bg-primary",
-                      )}
-                      // The bar is capped at full width; `ratio` itself stays
-                      // truthful so the figures beside it can read over 100%.
-                      style={{ width: `${Math.min(entry.ratio, 1) * 100}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    ratio={entry.ratio}
+                    tone={entry.isExceeded ? "destructive" : "primary"}
+                  />
 
                   <p className="text-xs text-muted-foreground">
                     {entry.isExceeded

@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
 import type { MonthOverview } from "@/lib/monthOverview";
 
@@ -18,29 +19,6 @@ interface MonthOverviewCardsProps {
 }
 
 const PLACEHOLDER = "—";
-
-// The bar under the budget and savings figures. Same shape as the one in the
-// budgets screen: the fill is capped at full width while the ratio beside it
-// stays truthful, so "140%" can be read without the bar overflowing its track.
-function ProgressBar({
-  ratio,
-  tone,
-}: {
-  ratio: number;
-  tone: "primary" | "destructive";
-}) {
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-      <div
-        className={cn(
-          "h-full rounded-full transition-[width]",
-          tone === "destructive" ? "bg-destructive" : "bg-primary",
-        )}
-        style={{ width: `${Math.min(Math.max(ratio, 0), 1) * 100}%` }}
-      />
-    </div>
-  );
-}
 
 function MonthExpensesCard({ overview, currency, isLoading }: MonthOverviewCardsProps) {
   const { total, previousTotal, previousMonthKey, changeRatio } = overview.expenses;

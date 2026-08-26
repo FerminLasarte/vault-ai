@@ -1,16 +1,8 @@
-import { useEffect, useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo } from "react";
+import { Controller } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
+import { useDialogForm } from "@/hooks/useDialogForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -78,10 +70,10 @@ export function InstallmentPlanDialog({
     register,
     handleSubmit,
     watch,
-    reset,
     formState: { errors, isSubmitting },
-  } = useForm<PlanFormInput, unknown, PlanFormValues>({
-    resolver: zodResolver(planSchema),
+  } = useDialogForm<PlanFormInput, PlanFormValues>({
+    schema: planSchema,
+    open,
     defaultValues: {
       description: "",
       totalAmount: 0,
@@ -92,34 +84,28 @@ export function InstallmentPlanDialog({
       firstDueDate: todayIsoDate(),
       cashPrice: null,
     },
+    values: editing
+      ? {
+          description: editing.description,
+          totalAmount: editing.total_amount,
+          installmentCount: editing.installment_count,
+          currency: editing.currency,
+          categoryId: editing.category_id,
+          paymentMethodId: editing.payment_method_id,
+          firstDueDate: editing.first_due_date,
+          cashPrice: editing.cash_price,
+        }
+      : {
+          description: "",
+          totalAmount: 0,
+          installmentCount: 12,
+          currency: CURRENCY_CODES[0],
+          categoryId: null,
+          paymentMethodId: null,
+          firstDueDate: todayIsoDate(),
+          cashPrice: null,
+        },
   });
-
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      editing
-        ? {
-            description: editing.description,
-            totalAmount: editing.total_amount,
-            installmentCount: editing.installment_count,
-            currency: editing.currency,
-            categoryId: editing.category_id,
-            paymentMethodId: editing.payment_method_id,
-            firstDueDate: editing.first_due_date,
-            cashPrice: editing.cash_price,
-          }
-        : {
-            description: "",
-            totalAmount: 0,
-            installmentCount: 12,
-            currency: CURRENCY_CODES[0],
-            categoryId: null,
-            paymentMethodId: null,
-            firstDueDate: todayIsoDate(),
-            cashPrice: null,
-          },
-    );
-  }, [open, editing, reset]);
 
   const total = Number(watch("totalAmount")) || 0;
   const count = Number(watch("installmentCount")) || 0;
@@ -160,223 +146,202 @@ export function InstallmentPlanDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {editing ? "Editar compra en cuotas" : "Nueva compra en cuotas"}
-          </DialogTitle>
-          <DialogDescription>
-            Cada cuota se propone en su mes y se registra cuando la confirmes.
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? "Editar compra en cuotas" : "Nueva compra en cuotas"}
+      description="Cada cuota se propone en su mes y se registra cuando la confirmes."
+      className="sm:max-w-lg"
+      layout="grid"
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isSubmitting}
+    >
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="plan-description">Descripción</Label>
+        <Input
+          id="plan-description"
+          placeholder="Ej. Notebook"
+          {...register("description")}
+        />
+        {errors.description && (
+          <p className="text-xs text-destructive">{errors.description.message}</p>
+        )}
+      </div>
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-        >
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="plan-description">Descripción</Label>
-            <Input
-              id="plan-description"
-              placeholder="Ej. Notebook"
-              {...register("description")}
-            />
-            {errors.description && (
-              <p className="text-xs text-destructive">{errors.description.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-total">Total</Label>
+        <Input
+          id="plan-total"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          {...register("totalAmount")}
+        />
+        {errors.totalAmount && (
+          <p className="text-xs text-destructive">{errors.totalAmount.message}</p>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-total">Total</Label>
-            <Input
-              id="plan-total"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              {...register("totalAmount")}
-            />
-            {errors.totalAmount && (
-              <p className="text-xs text-destructive">{errors.totalAmount.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-cash-price">Precio de contado (opcional)</Label>
+        <Input
+          id="plan-cash-price"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="Si lo sabés"
+          {...register("cashPrice")}
+        />
+        {errors.cashPrice && (
+          <p className="text-xs text-destructive">{errors.cashPrice.message}</p>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-cash-price">Precio de contado (opcional)</Label>
-            <Input
-              id="plan-cash-price"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Si lo sabés"
-              {...register("cashPrice")}
-            />
-            {errors.cashPrice && (
-              <p className="text-xs text-destructive">{errors.cashPrice.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-count">Cantidad de cuotas</Label>
+        <Input
+          id="plan-count"
+          type="number"
+          step="1"
+          min="2"
+          {...register("installmentCount")}
+        />
+        {errors.installmentCount && (
+          <p className="text-xs text-destructive">{errors.installmentCount.message}</p>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-count">Cantidad de cuotas</Label>
-            <Input
-              id="plan-count"
-              type="number"
-              step="1"
-              min="2"
-              {...register("installmentCount")}
-            />
-            {errors.installmentCount && (
-              <p className="text-xs text-destructive">
-                {errors.installmentCount.message}
-              </p>
-            )}
-          </div>
-
-          {cost && (
-            <p className="text-xs sm:col-span-2">
-              {cost.surcharge > 0 ? (
-                <span className="text-destructive">
-                  Pagás {formatCurrency(cost.surcharge, currency)} más que al contado (
-                  {formatPercent(cost.ratio)}).
-                </span>
-              ) : cost.surcharge < 0 ? (
-                <span className="text-muted-foreground">
-                  Sale {formatCurrency(Math.abs(cost.surcharge), currency)} menos que al
-                  contado.
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  Sin recargo: son cuotas sin interés.
-                </span>
-              )}
-            </p>
+      {cost && (
+        <p className="text-xs sm:col-span-2">
+          {cost.surcharge > 0 ? (
+            <span className="text-destructive">
+              Pagás {formatCurrency(cost.surcharge, currency)} más que al contado (
+              {formatPercent(cost.ratio)}).
+            </span>
+          ) : cost.surcharge < 0 ? (
+            <span className="text-muted-foreground">
+              Sale {formatCurrency(Math.abs(cost.surcharge), currency)} menos que al
+              contado.
+            </span>
+          ) : (
+            <span className="text-muted-foreground">
+              Sin recargo: son cuotas sin interés.
+            </span>
           )}
+        </p>
+      )}
 
-          {preview && (
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              {count} cuotas de {formatCurrency(preview.first, currency)}
-              {preview.differs &&
-                `, y la última de ${formatCurrency(preview.last, currency)} para que cierre exacto`}
-              .
-            </p>
+      {preview && (
+        <p className="text-xs text-muted-foreground sm:col-span-2">
+          {count} cuotas de {formatCurrency(preview.first, currency)}
+          {preview.differs &&
+            `, y la última de ${formatCurrency(preview.last, currency)} para que cierre exacto`}
+          .
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-currency">Moneda</Label>
+        <Controller
+          control={control}
+          name="currency"
+          render={({ field }) => (
+            <Select
+              items={CURRENCY_LABELS}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger id="plan-currency" className="w-full">
+                <SelectValue placeholder="Selecciona una moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-currency">Moneda</Label>
-            <Controller
-              control={control}
-              name="currency"
-              render={({ field }) => (
-                <Select
-                  items={CURRENCY_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => value && field.onChange(value)}
-                >
-                  <SelectTrigger id="plan-currency" className="w-full">
-                    <SelectValue placeholder="Selecciona una moneda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-category">Categoría</Label>
+        <Controller
+          control={control}
+          name="categoryId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                expenseCategories.map((category) => [String(category.id), category.name]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger id="plan-category" className="w-full">
+                <SelectValue placeholder="Sin categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {expenseCategories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.icon} {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-category">Categoría</Label>
-            <Controller
-              control={control}
-              name="categoryId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    expenseCategories.map((category) => [
-                      String(category.id),
-                      category.name,
-                    ]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                >
-                  <SelectTrigger id="plan-category" className="w-full">
-                    <SelectValue placeholder="Sin categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {expenseCategories.map((category) => (
-                      <SelectItem key={category.id} value={String(category.id)}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-account">Cuenta</Label>
+        <Controller
+          control={control}
+          name="paymentMethodId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                availableAccounts.map((method) => [String(method.id), method.name]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+              disabled={availableAccounts.length === 0}
+            >
+              <SelectTrigger id="plan-account" className="w-full">
+                <SelectValue placeholder="Sin cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAccounts.map((method) => (
+                  <SelectItem key={method.id} value={String(method.id)}>
+                    {method.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-account">Cuenta</Label>
-            <Controller
-              control={control}
-              name="paymentMethodId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    availableAccounts.map((method) => [String(method.id), method.name]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                  disabled={availableAccounts.length === 0}
-                >
-                  <SelectTrigger id="plan-account" className="w-full">
-                    <SelectValue placeholder="Sin cuenta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableAccounts.map((method) => (
-                      <SelectItem key={method.id} value={String(method.id)}>
-                        {method.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="plan-first-due">Primera cuota</Label>
+        <Controller
+          control={control}
+          name="firstDueDate"
+          render={({ field }) => (
+            <DatePicker
+              id="plan-first-due"
+              value={field.value}
+              onChange={field.onChange}
+              className="w-full"
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-first-due">Primera cuota</Label>
-            <Controller
-              control={control}
-              name="firstDueDate"
-              render={({ field }) => (
-                <DatePicker
-                  id="plan-first-due"
-                  value={field.value}
-                  onChange={field.onChange}
-                  className="w-full"
-                />
-              )}
-            />
-            {errors.firstDueDate && (
-              <p className="text-xs text-destructive">{errors.firstDueDate.message}</p>
-            )}
-          </div>
-
-          <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+        />
+        {errors.firstDueDate && (
+          <p className="text-xs text-destructive">{errors.firstDueDate.message}</p>
+        )}
+      </div>
+    </FormDialog>
   );
 }

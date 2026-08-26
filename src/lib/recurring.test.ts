@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { occurrenceAt, pendingOccurrences } from "@/lib/recurring";
+import { occurrenceAt, occurrencesBetween, pendingOccurrences } from "@/lib/recurring";
 
 describe("occurrenceAt", () => {
   it("returns the start date itself at index 0", () => {
@@ -101,5 +101,39 @@ describe("pendingOccurrences", () => {
       "2026-02-28",
       "2026-03-31",
     ]);
+  });
+});
+
+describe("occurrencesBetween", () => {
+  it("lists the monthly occurrences inside the window", () => {
+    expect(
+      occurrencesBetween("2026-01-10", "monthly", "2026-09-01", "2026-09-30"),
+    ).toEqual(["2026-09-10"]);
+  });
+
+  it("finds every weekly occurrence of a month", () => {
+    const dates = occurrencesBetween("2026-08-07", "weekly", "2026-09-01", "2026-09-30");
+    expect(dates).toEqual(["2026-09-04", "2026-09-11", "2026-09-18", "2026-09-25"]);
+  });
+
+  it("returns nothing when the series has not started yet", () => {
+    expect(
+      occurrencesBetween("2027-01-10", "monthly", "2026-09-01", "2026-09-30"),
+    ).toEqual([]);
+  });
+
+  it("keeps a yearly series out of the months it does not fall in", () => {
+    expect(
+      occurrencesBetween("2020-03-05", "yearly", "2026-09-01", "2026-09-30"),
+    ).toEqual([]);
+    expect(
+      occurrencesBetween("2020-03-05", "yearly", "2027-03-01", "2027-03-31"),
+    ).toEqual(["2027-03-05"]);
+  });
+
+  it("borrows the last day of a short month, like the rest of the series math", () => {
+    expect(
+      occurrencesBetween("2026-01-31", "monthly", "2027-02-01", "2027-02-28"),
+    ).toEqual(["2027-02-28"]);
   });
 });

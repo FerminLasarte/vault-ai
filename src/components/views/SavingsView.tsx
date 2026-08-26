@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { PiggyBank, Plus, Trash2, Pencil, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
@@ -117,15 +119,11 @@ export function SavingsView() {
           {isLoading ? (
             <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
           ) : progress.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 py-4">
-              <p className="text-sm text-muted-foreground">
-                Todavía no definiste ningún objetivo de ahorro.
-              </p>
-              <Button type="button" variant="outline" onClick={openCreate}>
-                <Plus />
-                Crear el primero
-              </Button>
-            </div>
+            <EmptyState
+              message="Todavía no definiste ningún objetivo de ahorro."
+              actionLabel="Crear el primero"
+              onAction={openCreate}
+            />
           ) : (
             <ul className="flex flex-col gap-6">
               {progress.map((entry) => (
@@ -178,15 +176,10 @@ export function SavingsView() {
                     </div>
                   </div>
 
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-[width]",
-                        entry.isReached ? "bg-emerald-600" : "bg-primary",
-                      )}
-                      style={{ width: `${Math.min(Math.max(entry.ratio, 0), 1) * 100}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    ratio={entry.ratio}
+                    tone={entry.isReached ? "positive" : "primary"}
+                  />
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     {entry.isReached ? (

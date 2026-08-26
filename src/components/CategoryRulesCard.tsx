@@ -13,14 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -161,68 +154,53 @@ export function CategoryRulesCard() {
         </div>
       </CardContent>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? "Editar regla" : "Nueva regla"}</DialogTitle>
-            <DialogDescription>No distingue mayúsculas ni acentos.</DialogDescription>
-          </DialogHeader>
+      <FormDialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        title={editing ? "Editar regla" : "Nueva regla"}
+        description="No distingue mayúsculas ni acentos."
+        onSubmit={handleSubmit(onSubmit)}
+        isSubmitting={isSubmitting}
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rule-pattern">Si la descripción contiene</Label>
+          <Input id="rule-pattern" placeholder="Ej. netflix" {...register("pattern")} />
+          {errors.pattern && (
+            <p className="text-xs text-destructive">{errors.pattern.message}</p>
+          )}
+        </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rule-pattern">Si la descripción contiene</Label>
-              <Input
-                id="rule-pattern"
-                placeholder="Ej. netflix"
-                {...register("pattern")}
-              />
-              {errors.pattern && (
-                <p className="text-xs text-destructive">{errors.pattern.message}</p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rule-category">Usar la categoría</Label>
-              <Controller
-                control={control}
-                name="categoryId"
-                render={({ field }) => (
-                  <Select
-                    items={Object.fromEntries(
-                      categories.map((category) => [String(category.id), category.name]),
-                    )}
-                    value={toSelectValue(field.value)}
-                    onValueChange={(value) => field.onChange(Number(value))}
-                  >
-                    <SelectTrigger id="rule-category" className="w-full">
-                      <SelectValue placeholder="Selecciona una categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={String(category.id)}>
-                          {category.icon} {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rule-category">Usar la categoría</Label>
+          <Controller
+            control={control}
+            name="categoryId"
+            render={({ field }) => (
+              <Select
+                items={Object.fromEntries(
+                  categories.map((category) => [String(category.id), category.name]),
                 )}
-              />
-              {errors.categoryId && (
-                <p className="text-xs text-destructive">{errors.categoryId.message}</p>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Guardando..." : "Guardar"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                value={toSelectValue(field.value)}
+                onValueChange={(value) => field.onChange(Number(value))}
+              >
+                <SelectTrigger id="rule-category" className="w-full">
+                  <SelectValue placeholder="Selecciona una categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={String(category.id)}>
+                      {category.icon} {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.categoryId && (
+            <p className="text-xs text-destructive">{errors.categoryId.message}</p>
+          )}
+        </div>
+      </FormDialog>
     </Card>
   );
 }

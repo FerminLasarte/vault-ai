@@ -32,6 +32,7 @@ import {
   convertAtDate,
   yearFromRange,
   recentMonthsRange,
+  getNextMonthKeys,
   yearRange,
   summaryInCurrency,
 } from "@/lib/finance";
@@ -1156,5 +1157,19 @@ describe("recentMonthsRange", () => {
 
   it("is not one whole calendar year, so the year selector does not claim one", () => {
     expect(yearFromRange(recentMonthsRange(12, new Date(2026, 7, 26)))).toBeNull();
+  });
+});
+
+describe("getNextMonthKeys", () => {
+  it("lists the months ahead, leaving out the one in progress", () => {
+    expect(getNextMonthKeys(3, "2026-08")).toEqual(["2026-09", "2026-10", "2026-11"]);
+  });
+
+  it("crosses the year boundary", () => {
+    expect(getNextMonthKeys(3, "2026-11")).toEqual(["2026-12", "2027-01", "2027-02"]);
+  });
+
+  it("returns nothing when asked for nothing", () => {
+    expect(getNextMonthKeys(0, "2026-08")).toEqual([]);
   });
 });

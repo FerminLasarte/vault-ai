@@ -27,7 +27,3 @@ export const CURRENCY_SHORT_LABELS: Record<string, string> = {
 };
 
 export const DEFAULT_CURRENCY = "ARS";
-
-export function isSupportedCurrency(code: string): boolean {
-  return CURRENCY_CODES.includes(code);
-}

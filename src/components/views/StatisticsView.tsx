@@ -21,6 +21,7 @@ import { TotalBalanceCard } from "@/components/TotalBalanceCard";
 import { MonthOverviewCards } from "@/components/MonthOverviewCards";
 import { AttentionNotice } from "@/components/AttentionNotice";
 import { RecentTransactions } from "@/components/RecentTransactions";
+import { UpcomingCommitments } from "@/components/UpcomingCommitments";
 import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
@@ -42,8 +43,10 @@ import {
   buildRateLookup,
   calculateBudgetProgress,
   calculateSummary,
+  currentMonthKey,
   exceededBudgets,
   getMonthKeysBetween,
+  getNextMonthKeys,
   groupExpensesByCategory,
   summaryInCurrency,
   yearFromRange,
@@ -52,12 +55,18 @@ import {
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { buildAttentionItems } from "@/lib/attention";
 import { buildMonthOverview } from "@/lib/monthOverview";
+import { projectCommitments } from "@/lib/projection";
 import { calculateSavingsProgress } from "@/lib/savings";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
 import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
+
+// How far ahead the commitments are read. Three months is the horizon a
+// monthly schedule makes meaningful: far enough to see an instalment plan
+// ending, close enough that nothing in it is guesswork.
+const PROJECTED_MONTHS = 3;
 
 // Sentinels for the period selector: the Select needs concrete values, and no
 // real year can collide with these.
@@ -158,6 +167,18 @@ export function StatisticsView({ request, tab }: ViewProps) {
     () =>
       buildMonthOverview({ transactions, budgets, savings: savingsProgress }, currency),
     [transactions, budgets, savingsProgress, currency],
+  );
+
+  // What the months ahead already owe. Read from the same schedules the
+  // pending notices are read from, only forwards.
+  const projection = useMemo(
+    () =>
+      projectCommitments(
+        { recurring, installmentPlans, loans },
+        getNextMonthKeys(PROJECTED_MONTHS, currentMonthKey()),
+        currency,
+      ),
+    [recurring, installmentPlans, loans, currency],
   );
 
   // Every kind of pending commitment is surfaced together: separate notices
@@ -267,6 +288,18 @@ export function StatisticsView({ request, tab }: ViewProps) {
     [filtered, monthKeys],
   );
 
+  // The projection is only appended when the period on screen runs up to today.
+  // Tacking three future months onto a chart of 2025 would put a gap in the
+  // axis and answer a question nobody asked.
+  const trendWithProjection = useMemo(() => {
+    if ((dateRange.to ?? "") < todayIsoDate()) return monthlyTrend;
+
+    return [
+      ...monthlyTrend,
+      ...projection.map((month) => ({ ...month, isProjected: true })),
+    ];
+  }, [monthlyTrend, projection, dateRange]);
+
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
       <PageHeader
@@ -321,6 +354,12 @@ export function StatisticsView({ request, tab }: ViewProps) {
 
           <MonthOverviewCards
             overview={monthOverview}
+            currency={currency}
+            isLoading={isLoading}
+          />
+
+          <UpcomingCommitments
+            months={projection}
             currency={currency}
             isLoading={isLoading}
           />
@@ -423,7 +462,7 @@ export function StatisticsView({ request, tab }: ViewProps) {
               isLoading={isLoading}
             />
             <IncomeVsExpenseChart
-              data={monthlyTrend}
+              data={trendWithProjection}
               currency={currency}
               isLoading={isLoading}
             />

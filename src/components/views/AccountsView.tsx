@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
 import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
@@ -198,15 +199,12 @@ export function AccountsView() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : paymentMethods.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 py-6">
-              <p className="text-sm text-muted-foreground">
-                Todavía no tienes cuentas registradas.
-              </p>
-              <Button type="button" variant="outline" onClick={openCreateDialog}>
-                <Plus />
-                Agregar la primera
-              </Button>
-            </div>
+            <EmptyState
+              message="Todavía no tienes cuentas registradas."
+              actionLabel="Agregar la primera"
+              onAction={openCreateDialog}
+              className="py-6"
+            />
           ) : (
             <ul className="flex flex-col">
               {paymentMethods.map((method) => (

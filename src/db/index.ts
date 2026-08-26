@@ -19,7 +19,6 @@ import type {
   SavingsTrackingMode,
   RecurringTransactionWithNames,
   Tag,
-  Transaction,
   TransactionWithCategory,
 } from "./schema";
 
@@ -50,7 +49,7 @@ let dbPromise: Promise<SqlConnection> | null = null;
 // connection is what triggers the Rust-side migrations (see src-tauri/src/lib.rs),
 // which create the schema and seed the default data — so by the time
 // this promise resolves, the database is fully ready.
-export function getDb(): Promise<SqlConnection> {
+function getDb(): Promise<SqlConnection> {
   if (!dbPromise) {
     dbPromise = Database.load(DATABASE_URL);
   }
@@ -168,13 +167,6 @@ export async function countTransactionsForPaymentMethod(id: number): Promise<num
     [id],
   );
   return rows[0]?.total ?? 0;
-}
-
-export async function listTransactions(): Promise<Transaction[]> {
-  const db = await getDb();
-  return db.select<Transaction[]>(
-    "SELECT * FROM transactions ORDER BY date DESC, id DESC",
-  );
 }
 
 // Joins the category and payment method names in SQL so the UI never has to

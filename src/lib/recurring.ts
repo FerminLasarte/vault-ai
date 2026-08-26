@@ -72,3 +72,34 @@ export function pendingOccurrences(
 
   return pending;
 }
+
+// Every occurrence of a series that falls inside a window, oldest first.
+//
+// The mirror of `pendingOccurrences`, which looks backwards for what is owed;
+// this looks forwards for what is coming. Both walk the series from index 0
+// rather than stepping from the previous date, for the reason `occurrenceAt`
+// explains.
+export function occurrencesBetween(
+  startDate: string,
+  frequency: RecurrenceFrequency,
+  from: string,
+  to: string,
+  maxOccurrences = 64,
+): string[] {
+  const found: string[] = [];
+
+  for (let index = 0; found.length < maxOccurrences; index++) {
+    const date = occurrenceAt(startDate, frequency, index);
+
+    // Dates are "YYYY-MM-DD", so lexicographic comparison is chronological.
+    if (date > to) break;
+    if (date >= from) found.push(date);
+
+    // The same guard `pendingOccurrences` carries: a weekly series anchored
+    // years back would otherwise spin for a long time before reaching the
+    // window at all.
+    if (index > 10_000) break;
+  }
+
+  return found;
+}

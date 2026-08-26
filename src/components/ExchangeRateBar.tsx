@@ -1,18 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pencil, RefreshCw } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ActionButton";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
+import { useDialogForm } from "@/hooks/useDialogForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppData } from "@/hooks/useAppData";
@@ -42,17 +33,13 @@ export function ExchangeRateBar() {
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors, isSubmitting },
-  } = useForm<RateFormInput, unknown, RateFormValues>({
-    resolver: zodResolver(rateSchema),
+  } = useDialogForm<RateFormInput, RateFormValues>({
+    schema: rateSchema,
+    open: isEditing,
     defaultValues: { buy: 0, sell: 0 },
+    values: { buy: exchangeRate?.buy ?? 0, sell: exchangeRate?.sell ?? 0 },
   });
-
-  useEffect(() => {
-    if (!isEditing) return;
-    reset({ buy: exchangeRate?.buy ?? 0, sell: exchangeRate?.sell ?? 0 });
-  }, [isEditing, exchangeRate, reset]);
 
   async function onSubmit(values: RateFormValues) {
     await saveManualExchangeRate(values.buy, values.sell);
@@ -99,56 +86,40 @@ export function ExchangeRateBar() {
         <span className="sr-only">Corregir cotización</span>
       </ActionButton>
 
-      <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Corregir cotización</DialogTitle>
-            <DialogDescription>
-              Se guarda con la fecha de hoy y reemplaza a la obtenida online. Se usa el
-              valor de venta para convertir entre pesos y dólares.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDialog
+        open={isEditing}
+        onOpenChange={setIsEditing}
+        title="Corregir cotización"
+        description="Se guarda con la fecha de hoy y reemplaza a la obtenida online. Se usa el valor de venta para convertir entre pesos y dólares."
+        onSubmit={handleSubmit(onSubmit)}
+        isSubmitting={isSubmitting}
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="exchange-rate-buy">Compra</Label>
+          <Input
+            id="exchange-rate-buy"
+            type="number"
+            step="0.01"
+            min="0"
+            {...register("buy")}
+          />
+          {errors.buy && <p className="text-xs text-destructive">{errors.buy.message}</p>}
+        </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="exchange-rate-buy">Compra</Label>
-              <Input
-                id="exchange-rate-buy"
-                type="number"
-                step="0.01"
-                min="0"
-                {...register("buy")}
-              />
-              {errors.buy && (
-                <p className="text-xs text-destructive">{errors.buy.message}</p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="exchange-rate-sell">Venta</Label>
-              <Input
-                id="exchange-rate-sell"
-                type="number"
-                step="0.01"
-                min="0"
-                {...register("sell")}
-              />
-              {errors.sell && (
-                <p className="text-xs text-destructive">{errors.sell.message}</p>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Guardando..." : "Guardar"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="exchange-rate-sell">Venta</Label>
+          <Input
+            id="exchange-rate-sell"
+            type="number"
+            step="0.01"
+            min="0"
+            {...register("sell")}
+          />
+          {errors.sell && (
+            <p className="text-xs text-destructive">{errors.sell.message}</p>
+          )}
+        </div>
+      </FormDialog>
     </div>
   );
 }

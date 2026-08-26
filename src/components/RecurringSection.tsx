@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Check, Pause, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { Check, Pause, Pencil, Play, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
+import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
@@ -98,15 +100,11 @@ export function RecurringSection() {
       {/* What used to be this screen's page header. As a tab it introduces
           itself the same way the instalments one beside it does: a line of
           description with its action on the right. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Movimientos que se repiten. Nada se registra hasta que lo confirmes.
-        </p>
-        <Button type="button" onClick={openCreate}>
-          <Plus />
-          Nueva recurrente
-        </Button>
-      </div>
+      <SectionIntro
+        description="Movimientos que se repiten. Nada se registra hasta que lo confirmes."
+        actionLabel="Nueva recurrente"
+        onAction={openCreate}
+      />
 
       {pending.length > 0 && (
         <Card>
@@ -216,15 +214,11 @@ export function RecurringSection() {
           {isLoading ? (
             <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
           ) : recurring.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 py-4">
-              <p className="text-sm text-muted-foreground">
-                Todavía no hay recurrentes. Por ejemplo, el alquiler o el sueldo.
-              </p>
-              <Button type="button" variant="outline" onClick={openCreate}>
-                <Plus />
-                Crear la primera
-              </Button>
-            </div>
+            <EmptyState
+              message="Todavía no hay recurrentes. Por ejemplo, el alquiler o el sueldo."
+              actionLabel="Crear la primera"
+              onAction={openCreate}
+            />
           ) : (
             <ul className="flex flex-col">
               {recurring.map((template) => (

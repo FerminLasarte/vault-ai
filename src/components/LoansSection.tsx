@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, HandCoins, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, HandCoins, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
+import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
@@ -166,15 +168,11 @@ export function LoansSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Préstamos con o sin interés, en cualquiera de las dos direcciones.
-        </p>
-        <Button type="button" onClick={openCreate}>
-          <Plus />
-          Nuevo préstamo
-        </Button>
-      </div>
+      <SectionIntro
+        description="Préstamos con o sin interés, en cualquiera de las dos direcciones."
+        actionLabel="Nuevo préstamo"
+        onAction={openCreate}
+      />
 
       {!isLoading && outstanding.size > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -294,15 +292,11 @@ export function LoansSection() {
           {isLoading ? (
             <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
           ) : loans.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 py-4">
-              <p className="text-sm text-muted-foreground">
-                Todavía no cargaste ningún préstamo.
-              </p>
-              <Button type="button" variant="outline" onClick={openCreate}>
-                <Plus />
-                Cargar el primero
-              </Button>
-            </div>
+            <EmptyState
+              message="Todavía no cargaste ningún préstamo."
+              actionLabel="Cargar el primero"
+              onAction={openCreate}
+            />
           ) : (
             <ul className="flex flex-col gap-5">
               {loans.map((loan) => {

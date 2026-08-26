@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import {
   Card,
@@ -123,16 +124,11 @@ export function CommitmentsView({ tab }: ViewProps) {
         </TabsContent>
 
         <TabsContent value="installments" className="flex flex-col gap-6 pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Compras en cuotas iguales. Cargá el precio de contado y te dice cuánto de
-              más estás pagando.
-            </p>
-            <Button type="button" onClick={openCreate}>
-              <Plus />
-              Nueva compra en cuotas
-            </Button>
-          </div>
+          <SectionIntro
+            description="Compras en cuotas iguales. Cargá el precio de contado y te dice cuánto de más estás pagando."
+            actionLabel="Nueva compra en cuotas"
+            onAction={openCreate}
+          />
 
           {!isLoading && outstanding.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

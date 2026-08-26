@@ -1,16 +1,8 @@
-import { useEffect, useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo } from "react";
+import { Controller } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
+import { useDialogForm } from "@/hooks/useDialogForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -74,10 +66,10 @@ export function RecurringDialog({
     register,
     handleSubmit,
     watch,
-    reset,
     formState: { errors, isSubmitting },
-  } = useForm<RecurringFormInput, unknown, RecurringFormValues>({
-    resolver: zodResolver(recurringSchema),
+  } = useDialogForm<RecurringFormInput, RecurringFormValues>({
+    schema: recurringSchema,
+    open,
     defaultValues: {
       description: "",
       amount: 0,
@@ -88,34 +80,28 @@ export function RecurringDialog({
       frequency: "monthly",
       startDate: todayIsoDate(),
     },
+    values: editing
+      ? {
+          description: editing.description,
+          amount: editing.amount,
+          type: editing.type,
+          currency: editing.currency,
+          categoryId: editing.category_id,
+          paymentMethodId: editing.payment_method_id,
+          frequency: editing.frequency,
+          startDate: editing.start_date,
+        }
+      : {
+          description: "",
+          amount: 0,
+          type: "expense",
+          currency: CURRENCY_CODES[0],
+          categoryId: null,
+          paymentMethodId: null,
+          frequency: "monthly",
+          startDate: todayIsoDate(),
+        },
   });
-
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      editing
-        ? {
-            description: editing.description,
-            amount: editing.amount,
-            type: editing.type,
-            currency: editing.currency,
-            categoryId: editing.category_id,
-            paymentMethodId: editing.payment_method_id,
-            frequency: editing.frequency,
-            startDate: editing.start_date,
-          }
-        : {
-            description: "",
-            amount: 0,
-            type: "expense",
-            currency: CURRENCY_CODES[0],
-            categoryId: null,
-            paymentMethodId: null,
-            frequency: "monthly",
-            startDate: todayIsoDate(),
-          },
-    );
-  }, [open, editing, reset]);
 
   const selectedType = watch("type");
   const selectedCurrency = watch("currency");
@@ -140,213 +126,196 @@ export function RecurringDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar recurrente" : "Nueva recurrente"}</DialogTitle>
-          <DialogDescription>
-            La fecha de inicio ancla toda la serie. Si es el 31, los meses cortos usan su
-            último día y el resto vuelve al 31.
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? "Editar recurrente" : "Nueva recurrente"}
+      description="La fecha de inicio ancla toda la serie. Si es el 31, los meses cortos usan su último día y el resto vuelve al 31."
+      className="sm:max-w-lg"
+      layout="grid"
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isSubmitting}
+    >
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="recurring-description">Descripción</Label>
+        <Input
+          id="recurring-description"
+          placeholder="Ej. Alquiler"
+          {...register("description")}
+        />
+        {errors.description && (
+          <p className="text-xs text-destructive">{errors.description.message}</p>
+        )}
+      </div>
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-        >
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="recurring-description">Descripción</Label>
-            <Input
-              id="recurring-description"
-              placeholder="Ej. Alquiler"
-              {...register("description")}
-            />
-            {errors.description && (
-              <p className="text-xs text-destructive">{errors.description.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-type">Tipo</Label>
+        <Controller
+          control={control}
+          name="type"
+          render={({ field }) => (
+            <Select
+              items={CATEGORY_TYPE_LABELS}
+              value={field.value}
+              onValueChange={(value) => field.onChange(value)}
+            >
+              <SelectTrigger id="recurring-type" className="w-full">
+                <SelectValue placeholder="Selecciona un tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">{CATEGORY_TYPE_LABELS.expense}</SelectItem>
+                <SelectItem value="income">{CATEGORY_TYPE_LABELS.income}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-type">Tipo</Label>
-            <Controller
-              control={control}
-              name="type"
-              render={({ field }) => (
-                <Select
-                  items={CATEGORY_TYPE_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => field.onChange(value)}
-                >
-                  <SelectTrigger id="recurring-type" className="w-full">
-                    <SelectValue placeholder="Selecciona un tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="expense">
-                      {CATEGORY_TYPE_LABELS.expense}
-                    </SelectItem>
-                    <SelectItem value="income">{CATEGORY_TYPE_LABELS.income}</SelectItem>
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-amount">Monto</Label>
+        <Input
+          id="recurring-amount"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          {...register("amount")}
+        />
+        {errors.amount && (
+          <p className="text-xs text-destructive">{errors.amount.message}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-currency">Moneda</Label>
+        <Controller
+          control={control}
+          name="currency"
+          render={({ field }) => (
+            <Select
+              items={CURRENCY_LABELS}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger id="recurring-currency" className="w-full">
+                <SelectValue placeholder="Selecciona una moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-frequency">Frecuencia</Label>
+        <Controller
+          control={control}
+          name="frequency"
+          render={({ field }) => (
+            <Select
+              items={RECURRENCE_FREQUENCY_LABELS}
+              value={field.value}
+              onValueChange={(value) => field.onChange(value)}
+            >
+              <SelectTrigger id="recurring-frequency" className="w-full">
+                <SelectValue placeholder="Selecciona una frecuencia" />
+              </SelectTrigger>
+              <SelectContent>
+                {RECURRENCE_FREQUENCIES.map((frequency) => (
+                  <SelectItem key={frequency} value={frequency}>
+                    {RECURRENCE_FREQUENCY_LABELS[frequency]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-category">Categoría</Label>
+        <Controller
+          control={control}
+          name="categoryId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                availableCategories.map((category) => [
+                  String(category.id),
+                  category.name,
+                ]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger id="recurring-category" className="w-full">
+                <SelectValue placeholder="Sin categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableCategories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.icon} {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-amount">Monto</Label>
-            <Input
-              id="recurring-amount"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              {...register("amount")}
-            />
-            {errors.amount && (
-              <p className="text-xs text-destructive">{errors.amount.message}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-currency">Moneda</Label>
-            <Controller
-              control={control}
-              name="currency"
-              render={({ field }) => (
-                <Select
-                  items={CURRENCY_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => value && field.onChange(value)}
-                >
-                  <SelectTrigger id="recurring-currency" className="w-full">
-                    <SelectValue placeholder="Selecciona una moneda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="recurring-account">Cuenta</Label>
+        <Controller
+          control={control}
+          name="paymentMethodId"
+          render={({ field }) => (
+            <Select
+              items={Object.fromEntries(
+                availableAccounts.map((method) => [String(method.id), method.name]),
               )}
-            />
-          </div>
+              value={toSelectValue(field.value)}
+              onValueChange={(value) => field.onChange(Number(value))}
+              disabled={availableAccounts.length === 0}
+            >
+              <SelectTrigger id="recurring-account" className="w-full">
+                <SelectValue placeholder="Sin cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAccounts.map((method) => (
+                  <SelectItem key={method.id} value={String(method.id)}>
+                    {method.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-frequency">Frecuencia</Label>
-            <Controller
-              control={control}
-              name="frequency"
-              render={({ field }) => (
-                <Select
-                  items={RECURRENCE_FREQUENCY_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => field.onChange(value)}
-                >
-                  <SelectTrigger id="recurring-frequency" className="w-full">
-                    <SelectValue placeholder="Selecciona una frecuencia" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RECURRENCE_FREQUENCIES.map((frequency) => (
-                      <SelectItem key={frequency} value={frequency}>
-                        {RECURRENCE_FREQUENCY_LABELS[frequency]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="recurring-start">Primera ocurrencia</Label>
+        <Controller
+          control={control}
+          name="startDate"
+          render={({ field }) => (
+            <DatePicker
+              id="recurring-start"
+              value={field.value}
+              onChange={field.onChange}
+              className="sm:w-auto"
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-category">Categoría</Label>
-            <Controller
-              control={control}
-              name="categoryId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    availableCategories.map((category) => [
-                      String(category.id),
-                      category.name,
-                    ]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                >
-                  <SelectTrigger id="recurring-category" className="w-full">
-                    <SelectValue placeholder="Sin categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableCategories.map((category) => (
-                      <SelectItem key={category.id} value={String(category.id)}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recurring-account">Cuenta</Label>
-            <Controller
-              control={control}
-              name="paymentMethodId"
-              render={({ field }) => (
-                <Select
-                  items={Object.fromEntries(
-                    availableAccounts.map((method) => [String(method.id), method.name]),
-                  )}
-                  value={toSelectValue(field.value)}
-                  onValueChange={(value) => field.onChange(Number(value))}
-                  disabled={availableAccounts.length === 0}
-                >
-                  <SelectTrigger id="recurring-account" className="w-full">
-                    <SelectValue placeholder="Sin cuenta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableAccounts.map((method) => (
-                      <SelectItem key={method.id} value={String(method.id)}>
-                        {method.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="recurring-start">Primera ocurrencia</Label>
-            <Controller
-              control={control}
-              name="startDate"
-              render={({ field }) => (
-                <DatePicker
-                  id="recurring-start"
-                  value={field.value}
-                  onChange={field.onChange}
-                  className="sm:w-auto"
-                />
-              )}
-            />
-            {errors.startDate && (
-              <p className="text-xs text-destructive">{errors.startDate.message}</p>
-            )}
-          </div>
-
-          <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+        />
+        {errors.startDate && (
+          <p className="text-xs text-destructive">{errors.startDate.message}</p>
+        )}
+      </div>
+    </FormDialog>
   );
 }

@@ -213,6 +213,24 @@ export function getRecentMonthKeys(
   return keys;
 }
 
+// Ascending "YYYY-MM" keys for the `count` months *after* `referenceMonthKey`.
+//
+// The mirror of `getRecentMonthKeys`. The reference month itself is left out on
+// purpose: it is already half spent and the screen reports it separately, so
+// including it would mix "what is left of this month" into a row of whole
+// months ahead.
+export function getNextMonthKeys(
+  count: number,
+  referenceMonthKey: string = currentMonthKey(),
+): string[] {
+  const keys: string[] = [];
+  const [year, month] = referenceMonthKey.split("-").map(Number);
+  for (let i = 1; i <= count; i++) {
+    keys.push(currentMonthKey(new Date(year, month - 1 + i, 1)));
+  }
+  return keys;
+}
+
 // Ascending month keys from `fromMonthKey` to `toMonthKey` inclusive, capped
 // at `maxMonths` (keeping the most recent ones) so an extreme range can never
 // produce an unreadable chart.

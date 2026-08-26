@@ -1,16 +1,9 @@
-import { useEffect, useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo } from "react";
+import { Controller } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/FormDialog";
+import { useDialogForm } from "@/hooks/useDialogForm";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -80,10 +73,10 @@ export function SavingsGoalDialog({
     register,
     handleSubmit,
     watch,
-    reset,
     formState: { errors, isSubmitting },
-  } = useForm<GoalFormInput, unknown, GoalFormValues>({
-    resolver: zodResolver(goalSchema),
+  } = useDialogForm<GoalFormInput, GoalFormValues>({
+    schema: goalSchema,
+    open,
     defaultValues: {
       name: "",
       targetAmount: 0,
@@ -92,30 +85,24 @@ export function SavingsGoalDialog({
       paymentMethodId: null,
       targetDate: null,
     },
+    values: editing
+      ? {
+          name: editing.name,
+          targetAmount: editing.target_amount,
+          currency: editing.currency,
+          trackingMode: editing.tracking_mode,
+          paymentMethodId: editing.payment_method_id,
+          targetDate: editing.target_date,
+        }
+      : {
+          name: "",
+          targetAmount: 0,
+          currency: CURRENCY_CODES[0],
+          trackingMode: "contributions",
+          paymentMethodId: null,
+          targetDate: null,
+        },
   });
-
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      editing
-        ? {
-            name: editing.name,
-            targetAmount: editing.target_amount,
-            currency: editing.currency,
-            trackingMode: editing.tracking_mode,
-            paymentMethodId: editing.payment_method_id,
-            targetDate: editing.target_date,
-          }
-        : {
-            name: "",
-            targetAmount: 0,
-            currency: CURRENCY_CODES[0],
-            trackingMode: "contributions",
-            paymentMethodId: null,
-            targetDate: null,
-          },
-    );
-  }, [open, editing, reset]);
 
   const trackingMode = watch("trackingMode");
   const currency = watch("currency");
@@ -131,172 +118,153 @@ export function SavingsGoalDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar objetivo" : "Nuevo objetivo"}</DialogTitle>
-          <DialogDescription>
-            Elegí cómo se mide el avance: solo con el saldo de una cuenta, o registrando
-            vos cada aporte.
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? "Editar objetivo" : "Nuevo objetivo"}
+      description="Elegí cómo se mide el avance: solo con el saldo de una cuenta, o registrando vos cada aporte."
+      className="sm:max-w-lg"
+      layout="grid"
+      onSubmit={handleSubmit(onSubmit)}
+      isSubmitting={isSubmitting}
+    >
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="goal-name">Nombre</Label>
+        <Input id="goal-name" placeholder="Ej. Viaje a Japón" {...register("name")} />
+        {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+      </div>
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-        >
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="goal-name">Nombre</Label>
-            <Input id="goal-name" placeholder="Ej. Viaje a Japón" {...register("name")} />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label>Cómo se mide</Label>
+        <Controller
+          control={control}
+          name="trackingMode"
+          render={({ field }) => (
+            <Tabs
+              value={field.value}
+              onValueChange={(next) => field.onChange(String(next))}
+            >
+              <TabsList>
+                <TabsTrigger value="contributions">
+                  {TRACKING_LABELS.contributions}
+                </TabsTrigger>
+                <TabsTrigger value="account">{TRACKING_LABELS.account}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label>Cómo se mide</Label>
-            <Controller
-              control={control}
-              name="trackingMode"
-              render={({ field }) => (
-                <Tabs
-                  value={field.value}
-                  onValueChange={(next) => field.onChange(String(next))}
-                >
-                  <TabsList>
-                    <TabsTrigger value="contributions">
-                      {TRACKING_LABELS.contributions}
-                    </TabsTrigger>
-                    <TabsTrigger value="account">{TRACKING_LABELS.account}</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              )}
-            />
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="goal-target">Objetivo</Label>
+        <Input
+          id="goal-target"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          {...register("targetAmount")}
+        />
+        {errors.targetAmount && (
+          <p className="text-xs text-destructive">{errors.targetAmount.message}</p>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="goal-target">Objetivo</Label>
-            <Input
-              id="goal-target"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              {...register("targetAmount")}
-            />
-            {errors.targetAmount && (
-              <p className="text-xs text-destructive">{errors.targetAmount.message}</p>
-            )}
-          </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="goal-currency">Moneda</Label>
+        <Controller
+          control={control}
+          name="currency"
+          render={({ field }) => (
+            <Select
+              items={CURRENCY_LABELS}
+              value={field.value}
+              onValueChange={(value) => value && field.onChange(value)}
+            >
+              <SelectTrigger id="goal-currency" className="w-full">
+                <SelectValue placeholder="Selecciona una moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="goal-currency">Moneda</Label>
-            <Controller
-              control={control}
-              name="currency"
-              render={({ field }) => (
-                <Select
-                  items={CURRENCY_LABELS}
-                  value={field.value}
-                  onValueChange={(value) => value && field.onChange(value)}
-                >
-                  <SelectTrigger id="goal-currency" className="w-full">
-                    <SelectValue placeholder="Selecciona una moneda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CURRENCY_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-
-          {trackingMode === "account" && (
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="goal-account">Cuenta a seguir</Label>
-              <Controller
-                control={control}
-                name="paymentMethodId"
-                render={({ field }) => (
-                  <Select
-                    items={Object.fromEntries(
-                      availableAccounts.map((method) => [String(method.id), method.name]),
-                    )}
-                    value={toSelectValue(field.value)}
-                    onValueChange={(value) => field.onChange(Number(value))}
-                    disabled={availableAccounts.length === 0}
-                  >
-                    <SelectTrigger id="goal-account" className="w-full">
-                      <SelectValue placeholder="Selecciona una cuenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableAccounts.map((method) => (
-                        <SelectItem key={method.id} value={String(method.id)}>
-                          {method.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+      {trackingMode === "account" && (
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor="goal-account">Cuenta a seguir</Label>
+          <Controller
+            control={control}
+            name="paymentMethodId"
+            render={({ field }) => (
+              <Select
+                items={Object.fromEntries(
+                  availableAccounts.map((method) => [String(method.id), method.name]),
                 )}
+                value={toSelectValue(field.value)}
+                onValueChange={(value) => field.onChange(Number(value))}
+                disabled={availableAccounts.length === 0}
+              >
+                <SelectTrigger id="goal-account" className="w-full">
+                  <SelectValue placeholder="Selecciona una cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableAccounts.map((method) => (
+                    <SelectItem key={method.id} value={String(method.id)}>
+                      {method.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {availableAccounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No hay cuentas en {currency}. Crea una en la sección Cuentas.
+            </p>
+          ) : (
+            errors.paymentMethodId && (
+              <p className="text-xs text-destructive">{errors.paymentMethodId.message}</p>
+            )
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="goal-date">Fecha límite (opcional)</Label>
+        <Controller
+          control={control}
+          name="targetDate"
+          render={({ field }) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <DatePicker
+                id="goal-date"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                className="sm:w-auto"
               />
-              {availableAccounts.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No hay cuentas en {currency}. Crea una en la sección Cuentas.
-                </p>
-              ) : (
-                errors.paymentMethodId && (
-                  <p className="text-xs text-destructive">
-                    {errors.paymentMethodId.message}
-                  </p>
-                )
+              {field.value && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => field.onChange(null)}
+                >
+                  Quitar
+                </Button>
               )}
             </div>
           )}
-
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="goal-date">Fecha límite (opcional)</Label>
-            <Controller
-              control={control}
-              name="targetDate"
-              render={({ field }) => (
-                <div className="flex flex-wrap items-center gap-2">
-                  <DatePicker
-                    id="goal-date"
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    className="sm:w-auto"
-                  />
-                  {field.value && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => field.onChange(null)}
-                    >
-                      Quitar
-                    </Button>
-                  )}
-                </div>
-              )}
-            />
-            <p className="text-xs text-muted-foreground">
-              Con fecha límite te digo si el ritmo actual alcanza.
-            </p>
-          </div>
-
-          <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        />
+        <p className="text-xs text-muted-foreground">
+          Con fecha límite te digo si el ritmo actual alcanza.
+        </p>
+      </div>
+    </FormDialog>
   );
 }

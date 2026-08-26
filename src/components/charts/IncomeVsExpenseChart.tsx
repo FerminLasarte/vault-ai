@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -13,8 +14,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCompactAmount, formatCurrency, formatMonthLabel } from "@/lib/format";
 import type { MonthlyTrendEntry } from "@/lib/finance";
 
+// A month of the trend, plus whether it has happened yet.
+export interface TrendEntry extends MonthlyTrendEntry {
+  // True for months that have not arrived: their figures are commitments read
+  // off a schedule, not movements that were recorded.
+  isProjected?: boolean;
+}
+
 interface IncomeVsExpenseChartProps {
-  data: MonthlyTrendEntry[];
+  data: TrendEntry[];
   currency: string;
   isLoading: boolean;
 }
@@ -44,7 +52,10 @@ export function IncomeVsExpenseChart({
     month: formatMonthLabel(entry.monthKey, "short"),
     Ingresos: entry.income,
     Gastos: entry.expenses,
+    isProjected: entry.isProjected === true,
   }));
+
+  const hasProjection = chartData.some((entry) => entry.isProjected);
 
   return (
     <Card>
@@ -80,10 +91,36 @@ export function IncomeVsExpenseChart({
                 iconSize={8}
                 wrapperStyle={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}
               />
-              <Bar dataKey="Ingresos" fill={INCOME_COLOR} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Gastos" fill={EXPENSE_COLOR} radius={[4, 4, 0, 0]} />
+              {/* Same colours, faded: a month that has not happened is the
+                  same kind of thing as one that has, only not yet true. A
+                  different hue would read as a different measure. */}
+              <Bar dataKey="Ingresos" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.month}
+                    fill={INCOME_COLOR}
+                    fillOpacity={entry.isProjected ? 0.35 : 1}
+                  />
+                ))}
+              </Bar>
+              <Bar dataKey="Gastos" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.month}
+                    fill={EXPENSE_COLOR}
+                    fillOpacity={entry.isProjected ? 0.35 : 1}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
+        )}
+
+        {hasProjection && !isLoading && (
+          <p className="pt-2 text-xs text-muted-foreground">
+            Los meses claros son lo que ya está comprometido: cuotas, préstamos y
+            recurrentes.
+          </p>
         )}
       </CardContent>
     </Card>
