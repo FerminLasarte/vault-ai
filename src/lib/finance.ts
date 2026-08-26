@@ -6,6 +6,7 @@ import type {
   TransactionWithCategory,
 } from "@/db/schema";
 import { normalizeForSearch, splitTagNames } from "@/lib/text";
+import { toIsoDate } from "@/lib/format";
 
 export interface FinancialSummary {
   balance: number;
@@ -491,6 +492,30 @@ export interface DateRange {
 // literal per call site, so an unfiltered range is referentially stable and
 // does not retrigger the memos that depend on it.
 export const EMPTY_DATE_RANGE: DateRange = { from: null, to: null };
+
+// How many months of history the analysis opens on.
+//
+// A whole year, so any month can be compared against the same month a year
+// earlier, and so the window never looks thin in January the way a
+// year-to-date one does.
+export const RECENT_MONTHS = 12;
+
+// The last `months` months up to and including today, as an inclusive range
+// starting on the first day of the earliest one.
+//
+// This exists because income and expenses are flows: a flow with no period is
+// not a large number, it is a meaningless one. A balance can be accumulated
+// since the beginning of time and still mean something — "what I have" — but
+// "what I earned", summed over every year at once, answers no question anyone
+// asks. So the analysis always has a period, and this is the one it starts on.
+export function recentMonthsRange(
+  months: number = RECENT_MONTHS,
+  reference: Date = new Date(),
+): DateRange {
+  const first = new Date(reference.getFullYear(), reference.getMonth() - (months - 1), 1);
+
+  return { from: toIsoDate(first), to: toIsoDate(reference) };
+}
 
 // The full calendar year as a date range.
 export function yearRange(year: number): DateRange {

@@ -23,6 +23,11 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoansSection } from "@/components/LoansSection";
+import { RecurringSection } from "@/components/RecurringSection";
+import { useRequestedTab } from "@/hooks/useRequestedTab";
+import { COMMITMENT_TABS, DEFAULT_COMMITMENT_TAB } from "@/lib/navigation";
+import type { CommitmentTab } from "@/lib/navigation";
+import type { ViewProps } from "@/lib/menu";
 import { InstallmentPlanDialog } from "@/components/InstallmentPlanDialog";
 import { useAppData } from "@/hooks/useAppData";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
@@ -34,7 +39,13 @@ import {
 import { formatCurrency, formatDate, formatPercent, todayIsoDate } from "@/lib/format";
 import type { InstallmentPlanWithNames, NewInstallmentPlan } from "@/db";
 
-export function DebtsView() {
+export function CommitmentsView({ tab }: ViewProps) {
+  const [current, setCurrent] = useRequestedTab<CommitmentTab>(
+    tab,
+    COMMITMENT_TABS,
+    DEFAULT_COMMITMENT_TAB,
+  );
+
   const {
     installmentPlans,
     categories,
@@ -93,15 +104,23 @@ export function DebtsView() {
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
       <PageHeader
-        title="Deudas"
-        description="Compras en cuotas y préstamos. Cada cuota se registra cuando la confirmes."
+        title="Compromisos"
+        description="Lo que se repite, lo que estás pagando en cuotas y lo que prestaste o te prestaron."
       />
 
-      <Tabs defaultValue="installments">
+      <Tabs
+        value={current}
+        onValueChange={(next) => setCurrent(String(next) as CommitmentTab)}
+      >
         <TabsList>
+          <TabsTrigger value="recurring">Recurrentes</TabsTrigger>
           <TabsTrigger value="installments">Compras en cuotas</TabsTrigger>
           <TabsTrigger value="loans">Préstamos</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="recurring" className="pt-6">
+          <RecurringSection />
+        </TabsContent>
 
         <TabsContent value="installments" className="flex flex-col gap-6 pt-6">
           <div className="flex flex-wrap items-center justify-between gap-3">

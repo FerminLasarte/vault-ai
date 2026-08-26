@@ -1,27 +1,15 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { ACTION_EVENT, isMenuAction, NAVIGATE_EVENT } from "@/lib/menu";
-import type { View } from "@/components/layout/Sidebar";
+import { isMenuViewId, MENU_DESTINATIONS } from "@/lib/navigation";
+import type { Destination } from "@/lib/navigation";
 import type { MenuAction } from "@/lib/menu";
 
-const VIEWS: readonly View[] = [
-  "statistics",
-  "transactions",
-  "recurring",
-  "categories",
-  "accounts",
-  "budgets",
-  "debts",
-  "savings",
-  "settings",
-];
-
-function isView(value: unknown): value is View {
-  return typeof value === "string" && (VIEWS as readonly string[]).includes(value);
-}
-
 interface MenuEventHandlers {
-  onNavigate: (view: View) => void;
+  // Takes a destination rather than a view: the menu still lists the sections
+  // that became tabs, so "Presupuestos" has to land on the right tab of the
+  // categories screen rather than merely on the screen.
+  onNavigate: (destination: Destination) => void;
   onAction: (action: MenuAction) => void;
 }
 
@@ -35,7 +23,9 @@ export function useMenuEvents({ onNavigate, onAction }: MenuEventHandlers): void
     // component and fires against a stale closure.
     const subscriptions = Promise.all([
       listen<string>(NAVIGATE_EVENT, (event) => {
-        if (isView(event.payload)) onNavigate(event.payload);
+        if (isMenuViewId(event.payload)) {
+          onNavigate(MENU_DESTINATIONS[event.payload]);
+        }
       }),
       listen<string>(ACTION_EVENT, (event) => {
         if (isMenuAction(event.payload)) onAction(event.payload);

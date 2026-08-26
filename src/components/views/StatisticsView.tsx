@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -17,43 +16,71 @@ import {
 } from "@/components/ui/select";
 import { CategorySelect } from "@/components/filters/CategorySelect";
 import { DateRangePicker } from "@/components/DateRangePicker";
-import { SummaryCards } from "@/components/SummaryCards";
+import { SummaryBar } from "@/components/SummaryBar";
+import { TotalBalanceCard } from "@/components/TotalBalanceCard";
+import { MonthOverviewCards } from "@/components/MonthOverviewCards";
+import { AttentionNotice } from "@/components/AttentionNotice";
+import { RecentTransactions } from "@/components/RecentTransactions";
 import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
-import { AlertTriangle, HardDriveDownload, Printer, Repeat } from "lucide-react";
+import { Printer } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useRequestedTab } from "@/hooks/useRequestedTab";
+import { DEFAULT_STATISTICS_TAB, STATISTICS_TABS } from "@/lib/navigation";
+import type { StatisticsTab } from "@/lib/navigation";
 import {
   applyTransactionFilters,
   availableYears,
+  calculateAccountBalances,
+  consolidateByCurrency,
+  filterByCurrency,
+  recentMonthsRange,
+  totalBalanceByCurrency,
   buildMonthlyTrend,
   buildRateLookup,
   calculateBudgetProgress,
   calculateSummary,
-  EMPTY_DATE_RANGE,
-  currentMonthKey,
   exceededBudgets,
   getMonthKeysBetween,
-  getRecentMonthKeys,
   groupExpensesByCategory,
   summaryInCurrency,
   yearFromRange,
   yearRange,
 } from "@/lib/finance";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
+import { buildAttentionItems } from "@/lib/attention";
+import { buildMonthOverview } from "@/lib/monthOverview";
+import { calculateSavingsProgress } from "@/lib/savings";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
 import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
 
-const TREND_MONTHS = 6;
+// Sentinels for the period selector: the Select needs concrete values, and no
+// real year can collide with these.
+//
+// There is deliberately no "todo el histórico" any more. Income and expenses
+// are flows, and a flow summed over every year at once is not a big number but
+// a meaningless one — see `recentMonthsRange`. A period is always in force; the
+// only question is which.
+const RECENT_PERIOD = "__recent__";
+const RECENT_PERIOD_LABEL = "Últimos 12 meses";
 
-// Sentinel for "no year filter": the Select needs a concrete value, and no real
-// year can collide with it.
-const ALL_YEARS = "__all__";
+// Shown, never chosen: it is what the selector reads when the range came from
+// the date picker instead of from this list.
+const CUSTOM_PERIOD = "__custom__";
+const CUSTOM_PERIOD_LABEL = "Personalizado";
 
-export function StatisticsView({ request }: ViewProps) {
+export function StatisticsView({ request, tab }: ViewProps) {
+  const [currentTab, setCurrentTab] = useRequestedTab<StatisticsTab>(
+    tab,
+    STATISTICS_TABS,
+    DEFAULT_STATISTICS_TAB,
+  );
+
   const {
     transactions,
     categories,
@@ -61,6 +88,9 @@ export function StatisticsView({ request }: ViewProps) {
     recurring,
     installmentPlans,
     loans,
+    savingsGoals,
+    savingsContributions,
+    paymentMethods,
     exchangeRate,
     exchangeRateHistory,
     lastBackupAt,
@@ -69,13 +99,65 @@ export function StatisticsView({ request }: ViewProps) {
 
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [dateRange, setDateRange] = useState(EMPTY_DATE_RANGE);
+  // Computed once, on mount: the analysis opens on a real period rather than on
+  // the whole history.
+  const [dateRange, setDateRange] = useState(recentMonthsRange);
 
   // Deliberately computed from the unfiltered list: a budget is about the real
   // period total, not about whatever slice the user is currently looking at.
   const overspent = useMemo(
     () => exceededBudgets(calculateBudgetProgress(budgets, transactions)),
     [budgets, transactions],
+  );
+
+  // The same figures the savings screen shows, so the card above can only ever
+  // agree with it.
+  const savingsProgress = useMemo(
+    () =>
+      calculateSavingsProgress(
+        savingsGoals,
+        {
+          accounts: paymentMethods,
+          transactions,
+          contributions: savingsContributions,
+        },
+        todayIsoDate(),
+      ),
+    [savingsGoals, paymentMethods, transactions, savingsContributions],
+  );
+
+  // Everything the user holds, in one figure.
+  //
+  // Taken from the account balances rather than from the transaction totals, so
+  // it counts each account's opening balance too and can never disagree with
+  // the accounts screen. Consolidated into the selected currency, because a
+  // "total" that left out the dollar accounts would not be one — and null
+  // rather than approximate when there is no quote to consolidate with.
+  const totalBalance = useMemo(() => {
+    const perCurrency = totalBalanceByCurrency(
+      paymentMethods,
+      calculateAccountBalances(paymentMethods, transactions),
+    );
+    const rate = exchangeRate?.sell ?? 0;
+
+    return {
+      perCurrency,
+      unified: consolidateByCurrency(perCurrency, currency, rate),
+      unifiedConverted: consolidateByCurrency(
+        perCurrency,
+        currency === "ARS" ? "USD" : "ARS",
+        rate,
+      ),
+    };
+  }, [paymentMethods, transactions, currency, exchangeRate]);
+
+  // Like `overspent` above, built from the unfiltered list: this block is about
+  // the month the user is in, not about the slice the filters select. The
+  // currency is the exception — totals in two currencies cannot be added.
+  const monthOverview = useMemo(
+    () =>
+      buildMonthOverview({ transactions, budgets, savings: savingsProgress }, currency),
+    [transactions, budgets, savingsProgress, currency],
   );
 
   // Every kind of pending commitment is surfaced together: separate notices
@@ -101,9 +183,23 @@ export function StatisticsView({ request }: ViewProps) {
     [transactions, currency, categoryId, dateRange],
   );
 
+  // The summary has no filters beyond the currency, so its list of recent
+  // movements follows that alone rather than the analysis filters.
+  const recentInCurrency = useMemo(
+    () => filterByCurrency(transactions, currency),
+    [transactions, currency],
+  );
+
   const backup = useMemo(
     () => backupStatus(lastBackupAt, transactions.length),
     [lastBackupAt, transactions.length],
+  );
+
+  // One list rather than three independent conditions in the markup: what to
+  // raise, and in what order, is a decision worth testing on its own.
+  const attention = useMemo(
+    () => buildAttentionItems({ overspent, backup, pendingCount }),
+    [overspent, backup, pendingCount],
   );
 
   const report = useMemo(
@@ -130,6 +226,13 @@ export function StatisticsView({ request }: ViewProps) {
   // selector could end up naming a year the charts are no longer showing.
   const selectedYear = yearFromRange(dateRange);
 
+  // The same reasoning for the rolling window, and for admitting that the range
+  // came from the date picker instead of from this list.
+  const defaultRange = recentMonthsRange();
+  const isRecentPeriod =
+    dateRange.from === defaultRange.from && dateRange.to === defaultRange.to;
+  const isCustomPeriod = !isRecentPeriod && selectedYear === null;
+
   const summary = useMemo(() => calculateSummary(filtered), [filtered]);
 
   // Built from the cached series so each movement is valued at the rate that
@@ -151,15 +254,12 @@ export function StatisticsView({ request }: ViewProps) {
   );
   const categoryBreakdown = useMemo(() => groupExpensesByCategory(filtered), [filtered]);
 
-  // The trend spans the selected range when there is one, and the last six
-  // months otherwise.
+  // The trend spans the selected period, which is always set — so there is no
+  // "no range" case left to invent a default for.
   const monthKeys = useMemo(() => {
-    if (dateRange.from || dateRange.to) {
-      const from = (dateRange.from ?? dateRange.to ?? "").slice(0, 7);
-      const to = (dateRange.to ?? dateRange.from ?? "").slice(0, 7);
-      return getMonthKeysBetween(from, to);
-    }
-    return getRecentMonthKeys(TREND_MONTHS, currentMonthKey());
+    const from = (dateRange.from ?? dateRange.to ?? "").slice(0, 7);
+    const to = (dateRange.to ?? dateRange.from ?? "").slice(0, 7);
+    return getMonthKeysBetween(from, to);
   }, [dateRange]);
 
   const monthlyTrend = useMemo(
@@ -171,12 +271,18 @@ export function StatisticsView({ request }: ViewProps) {
     <div className="flex flex-col gap-6 sm:gap-8">
       <PageHeader
         title="Estadísticas"
-        description="Analiza tus finanzas con filtros combinables."
+        description="Cómo venís este mes, y qué pasó a lo largo del tiempo."
         actions={
-          <Button type="button" variant="outline" onClick={() => void printWindow()}>
-            <Printer />
-            Imprimir informe
-          </Button>
+          <>
+            {/* The currency belongs to the whole screen rather than to either
+                tab: both read figures in it, and duplicating the switch inside
+                each one would let the two drift apart. */}
+            <CurrencyFilter value={currency} onChange={setCurrency} />
+            <Button type="button" variant="outline" onClick={() => void printWindow()}>
+              <Printer />
+              Imprimir informe
+            </Button>
+          </>
         }
       />
 
@@ -185,146 +291,145 @@ export function StatisticsView({ request }: ViewProps) {
           than from a second set they would have to keep in sync. */}
       <PrintableReport report={report} />
 
-      {overspent.length > 0 && (
-        <Card className="border-destructive/50">
-          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <AlertTriangle className="size-4 shrink-0 text-destructive" />
-            <span className="text-sm font-medium">
-              {overspent.length === 1
-                ? "Superaste un presupuesto"
-                : `Superaste ${overspent.length} presupuestos`}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {overspent
-                .map(
-                  (entry) =>
-                    `${entry.budget.category_name} (${Math.round(entry.ratio * 100)}%)`,
-                )
-                .join(" · ")}
-            </span>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs
+        value={currentTab}
+        onValueChange={(next) => setCurrentTab(String(next) as StatisticsTab)}
+      >
+        <TabsList>
+          <TabsTrigger value="summary">Resumen</TabsTrigger>
+          <TabsTrigger value="analysis">Análisis</TabsTrigger>
+        </TabsList>
 
-      {backup.isOverdue && (
-        <Card className="border-destructive/50">
-          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <HardDriveDownload className="size-4 shrink-0 text-destructive" />
-            <span className="text-sm font-medium">
-              {backup.daysAgo === null
-                ? "Nunca guardaste una copia de seguridad"
-                : `Hace ${backup.daysAgo} días que no guardás una copia`}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Tus datos viven solo en este equipo. Guardá una desde Ajustes.
-            </span>
-          </CardContent>
-        </Card>
-      )}
+        {/* Where the user stands right now: what they have, how the month is
+            going, and what they last did. No period to choose, because every
+            figure here already answers to one. */}
+        <TabsContent value="summary" className="flex flex-col gap-6 pt-6">
+          <AttentionNotice items={attention} />
 
-      {pendingCount > 0 && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Repeat className="size-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium">
-              {pendingCount === 1
-                ? "Tenés 1 movimiento pendiente de confirmar"
-                : `Tenés ${pendingCount} movimientos pendientes de confirmar`}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              Revisalos en Recurrentes y en Deudas.
-            </span>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statistics-currency">Moneda</Label>
-            <CurrencyFilter value={currency} onChange={setCurrency} />
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium text-muted-foreground">Balance</h2>
+            <TotalBalanceCard
+              perCurrency={totalBalance.perCurrency}
+              unified={totalBalance.unified}
+              unifiedConverted={totalBalance.unifiedConverted}
+              currency={currency}
+              convertedCurrency={otherCurrency}
+              isLoading={isLoading}
+              footer={<ExchangeRateBar />}
+            />
           </div>
 
-          <div className="flex min-w-52 flex-col gap-1.5">
-            <Label htmlFor="statistics-category">Categoría</Label>
+          <MonthOverviewCards
+            overview={monthOverview}
+            currency={currency}
+            isLoading={isLoading}
+          />
+
+          <RecentTransactions
+            transactions={recentInCurrency}
+            currency={currency}
+            isLoading={isLoading}
+          />
+        </TabsContent>
+
+        {/* What happened over a stretch of time. Everything here is a flow, so
+            everything here is bounded by the period above it. */}
+        <TabsContent value="analysis" className="flex flex-col gap-6 pt-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Label htmlFor="statistics-category" className="sr-only">
+              Categoría
+            </Label>
             <CategorySelect
               id="statistics-category"
               categories={categories}
               value={categoryId}
               onChange={setCategoryId}
-              className="w-full"
+              className="min-w-52"
             />
-          </div>
 
-          {years.length > 0 && (
-            <div className="flex min-w-36 flex-col gap-1.5">
-              <Label htmlFor="statistics-year">Año</Label>
-              <Select
-                items={{
-                  [ALL_YEARS]: "Todos",
-                  ...Object.fromEntries(
-                    years.map((year) => [String(year), String(year)]),
-                  ),
-                }}
-                value={selectedYear === null ? ALL_YEARS : String(selectedYear)}
-                onValueChange={(value) =>
-                  setDateRange(
-                    String(value) === ALL_YEARS
-                      ? EMPTY_DATE_RANGE
-                      : yearRange(Number(value)),
-                  )
-                }
-              >
-                <SelectTrigger id="statistics-year" className="w-full">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_YEARS}>Todos</SelectItem>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={String(year)}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+            <Label htmlFor="statistics-period" className="sr-only">
+              Período
+            </Label>
+            <Select
+              items={{
+                [RECENT_PERIOD]: RECENT_PERIOD_LABEL,
+                ...(isCustomPeriod ? { [CUSTOM_PERIOD]: CUSTOM_PERIOD_LABEL } : {}),
+                ...Object.fromEntries(years.map((year) => [String(year), String(year)])),
+              }}
+              value={
+                isRecentPeriod
+                  ? RECENT_PERIOD
+                  : isCustomPeriod
+                    ? CUSTOM_PERIOD
+                    : String(selectedYear)
+              }
+              onValueChange={(value) =>
+                setDateRange(
+                  String(value) === RECENT_PERIOD
+                    ? recentMonthsRange()
+                    : yearRange(Number(value)),
+                )
+              }
+            >
+              <SelectTrigger id="statistics-period" className="min-w-44">
+                <SelectValue placeholder={RECENT_PERIOD_LABEL} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={RECENT_PERIOD}>{RECENT_PERIOD_LABEL}</SelectItem>
+                {/* Only listed while it is what the range actually is: picking
+                    "Personalizado" from a list would mean nothing. */}
+                {isCustomPeriod && (
+                  <SelectItem value={CUSTOM_PERIOD}>{CUSTOM_PERIOD_LABEL}</SelectItem>
+                )}
+                {years.map((year) => (
+                  <SelectItem key={year} value={String(year)}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="statistics-dates">Rango de fechas</Label>
+            <Label htmlFor="statistics-dates" className="sr-only">
+              Rango de fechas
+            </Label>
             <DateRangePicker
               id="statistics-dates"
               value={dateRange}
-              onChange={setDateRange}
+              onChange={(range) =>
+                // Clearing the dates means "back to the default window", not
+                // "no period at all": the figures below are flows and an
+                // unbounded one says nothing.
+                setDateRange(
+                  range.from === null && range.to === null ? recentMonthsRange() : range,
+                )
+              }
             />
           </div>
-        </CardContent>
-      </Card>
 
-      <div className="flex flex-col gap-3">
-        <SummaryCards
-          summary={summary}
-          convertedSummary={convertedSummary}
-          convertedCurrency={otherCurrency}
-          currency={currency}
-          isLoading={isLoading}
-          usesHistoricalRates={exchangeRateHistory.length > 0}
-        />
-        <ExchangeRateBar />
-      </div>
+          <SummaryBar
+            summary={summary}
+            convertedSummary={convertedSummary}
+            convertedCurrency={otherCurrency}
+            currency={currency}
+            isLoading={isLoading}
+            usesHistoricalRates={exchangeRateHistory.length > 0}
+            footer={<ExchangeRateBar />}
+          />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <CategoryBreakdownChart
-          data={categoryBreakdown}
-          currency={currency}
-          isLoading={isLoading}
-        />
-        <IncomeVsExpenseChart
-          data={monthlyTrend}
-          currency={currency}
-          isLoading={isLoading}
-        />
-      </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <CategoryBreakdownChart
+              data={categoryBreakdown}
+              currency={currency}
+              isLoading={isLoading}
+            />
+            <IncomeVsExpenseChart
+              data={monthlyTrend}
+              currency={currency}
+              isLoading={isLoading}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

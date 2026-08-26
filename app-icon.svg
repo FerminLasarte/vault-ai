@@ -2,7 +2,15 @@
   <!-- Square, plated source for `tauri icon`. The logo is neither square nor
        opaque, and the system shows one icon file whatever the theme: on a dark
        dock a transparent mark all but disappears, so it sits on a white tile
-       that reads against both. -->
+       that reads against both.
+
+       The tile is full-bleed here, which is right for Windows and Linux and
+       wrong for macOS: Apple's grid puts the rounded body in 824x824 of a 1024
+       canvas, so a plate filling the canvas draws about a quarter larger than
+       every neighbouring app in the Dock. `tauri icon` does not apply that
+       inset, so icons/icon.icns is built separately from the same artwork
+       scaled to 824 and centred with a 100px transparent margin. Regenerating
+       the icons from this file means redoing that step for the .icns. -->
   <rect width="1024" height="1024" rx="224" ry="224" fill="#fff"/>
   <g transform="translate(172.00 184.19) scale(2.27015)" fill="#000">
     <style>.cls-1 { fill: #fefefe; }</style>

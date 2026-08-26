@@ -18,6 +18,14 @@ export const CURRENCY_LABELS: Record<string, string> = Object.fromEntries(
   CURRENCIES.map((currency) => [currency.code, currency.label]),
 );
 
+// How to name a currency where a full label would not fit and the code alone
+// would read as jargon — a column heading over a figure that already carries
+// its own symbol.
+export const CURRENCY_SHORT_LABELS: Record<string, string> = {
+  ARS: "En pesos",
+  USD: "En dólares",
+};
+
 export const DEFAULT_CURRENCY = "ARS";
 
 export function isSupportedCurrency(code: string): boolean {

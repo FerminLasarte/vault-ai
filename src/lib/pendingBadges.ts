@@ -4,7 +4,7 @@ import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { BUDGET_WARNING_RATIO } from "@/lib/notifications";
 import type { NotificationSources } from "@/lib/notifications";
-import type { View } from "@/components/layout/Sidebar";
+import type { View } from "@/lib/navigation";
 
 export type PendingBadges = Partial<Record<View, number>>;
 
@@ -23,20 +23,22 @@ export function pendingBadges(
 ): PendingBadges {
   const badges: PendingBadges = {};
 
-  const recurring = collectPendingRecurrences(sources.recurring, today).length;
-  if (recurring > 0) badges.recurring = recurring;
-
-  // Instalment purchases and loans live in the same section, so their counts
-  // belong in the same badge.
-  const debts =
+  // Recurring movements, instalments and loan payments are all confirmed the
+  // same way and now share a section, so they share a badge: what the user
+  // needs to know is how many things are waiting, not how they are filed.
+  const commitments =
+    collectPendingRecurrences(sources.recurring, today).length +
     collectPendingInstallments(sources.installmentPlans, today).length +
     collectPendingLoanPayments(sources.loans, today).length;
-  if (debts > 0) badges.debts = debts;
+  if (commitments > 0) badges.commitments = commitments;
 
+  // Budgets moved in with the categories they cap, so this count rides on that
+  // section. It counts caps at or near the limit, which is a warning rather
+  // than a queue of work — the statistics screen spells out which ones.
   const budgets = calculateBudgetProgress(sources.budgets, sources.transactions).filter(
     (progress) => progress.ratio >= BUDGET_WARNING_RATIO,
   ).length;
-  if (budgets > 0) badges.budgets = budgets;
+  if (budgets > 0) badges.categories = budgets;
 
   return badges;
 }

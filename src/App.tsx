@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Sidebar, type View } from "@/components/layout/Sidebar";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { useAppData } from "@/hooks/useAppData";
 import { pendingBadges } from "@/lib/pendingBadges";
 import { todayIsoDate } from "@/lib/format";
@@ -7,9 +7,7 @@ import { StatisticsView } from "@/components/views/StatisticsView";
 import { TransactionsView } from "@/components/views/TransactionsView";
 import { CategoriesView } from "@/components/views/CategoriesView";
 import { AccountsView } from "@/components/views/AccountsView";
-import { RecurringView } from "@/components/views/RecurringView";
-import { BudgetsView } from "@/components/views/BudgetsView";
-import { DebtsView } from "@/components/views/DebtsView";
+import { CommitmentsView } from "@/components/views/CommitmentsView";
 import { SavingsView } from "@/components/views/SavingsView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { Toaster } from "@/components/ui/sonner";
@@ -22,18 +20,17 @@ import { AppErrorFallback, ViewErrorFallback } from "@/components/ErrorFallback"
 import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { MENU_ACTION_VIEW } from "@/lib/menu";
 import type { MenuAction, MenuRequest, ViewProps } from "@/lib/menu";
+import type { Destination, TabRequest, View } from "@/lib/navigation";
 
-// Views take the pending menu request, and a component that declares no props
-// is still assignable here — so only the two that answer a menu entry have to
-// know this exists.
+// Views take the pending menu request and the tab it asked for, and a component
+// that declares no props is still assignable here — so only the views that
+// answer a menu entry or hold tabs have to know any of this exists.
 const VIEWS: Record<View, (props: ViewProps) => React.JSX.Element> = {
   statistics: StatisticsView,
   transactions: TransactionsView,
+  commitments: CommitmentsView,
   categories: CategoriesView,
   accounts: AccountsView,
-  recurring: RecurringView,
-  budgets: BudgetsView,
-  debts: DebtsView,
   savings: SavingsView,
   settings: SettingsView,
 };
@@ -65,6 +62,10 @@ function SidebarWithBadges({
 function App() {
   const [view, setView] = useState<View>("statistics");
   const [request, setRequest] = useState<MenuRequest | null>(null);
+  // The tab a menu entry asked for, if it asked for one. Held here rather than
+  // inside each view because the request arrives from outside the view — often
+  // while a different one is on screen.
+  const [tab, setTab] = useState<TabRequest | null>(null);
   const CurrentView = VIEWS[view];
 
   // An action is answered by the view that owns it, which may not be the one on
@@ -75,7 +76,18 @@ function App() {
     setRequest((previous) => ({ action, seq: (previous?.seq ?? 0) + 1 }));
   }, []);
 
-  useMenuEvents({ onNavigate: setView, onAction: handleAction });
+  // Three of the menu's nine entries now name a tab rather than a view of their
+  // own. A view that receives a tab it does not recognise ignores it, which is
+  // what keeps a stale request from a previous navigation harmless.
+  const handleNavigate = useCallback((destination: Destination) => {
+    setView(destination.view);
+    if (destination.tab !== undefined) {
+      const requested = destination.tab;
+      setTab((previous) => ({ value: requested, seq: (previous?.seq ?? 0) + 1 }));
+    }
+  }, []);
+
+  useMenuEvents({ onNavigate: handleNavigate, onAction: handleAction });
 
   return (
     // Two boundaries, deliberately. The outer one catches the providers, where
@@ -93,13 +105,28 @@ function App() {
             <div className="flex h-screen bg-background text-foreground">
               <SidebarWithBadges currentView={view} onNavigate={setView} />
               <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-8">
+                {/* Fills this column's top padding, which is the strip along
+                    the window's top edge that the sidebar header and the page
+                    header between them leave uncovered — and the first place a
+                    hand reaches to move a window. The negative margin cancels
+                    its own height, so it takes up the space that was already
+                    empty and pushes nothing down.
+
+                    It scrolls away with the content instead of floating above
+                    it, which is the point: a fixed strip would keep taking
+                    clicks meant for whatever had scrolled underneath it. */}
+                <div
+                  aria-hidden
+                  data-tauri-drag-region
+                  className="-mt-4 h-4 sm:-mt-8 sm:h-8"
+                />
                 <ErrorBoundary
                   resetKey={view}
                   fallback={(error, retry) => (
                     <ViewErrorFallback error={error} retry={retry} />
                   )}
                 >
-                  <CurrentView request={request} />
+                  <CurrentView request={request} tab={tab} />
                 </ErrorBoundary>
               </main>
             </div>

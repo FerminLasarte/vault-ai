@@ -20,7 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { RecurringDialog } from "@/components/RecurringDialog";
 import { useAppData } from "@/hooks/useAppData";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
@@ -29,7 +28,7 @@ import { RECURRENCE_FREQUENCY_LABELS, TRANSACTION_TYPE_LABELS } from "@/lib/labe
 import { cn } from "@/lib/utils";
 import type { NewRecurringTransaction, RecurringTransactionWithNames } from "@/db";
 
-export function RecurringView() {
+export function RecurringSection() {
   const {
     recurring,
     categories,
@@ -95,17 +94,19 @@ export function RecurringView() {
   }
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-8">
-      <PageHeader
-        title="Recurrentes"
-        description="Movimientos que se repiten. Nada se registra hasta que lo confirmes."
-        actions={
-          <Button type="button" onClick={openCreate}>
-            <Plus />
-            Nueva recurrente
-          </Button>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      {/* What used to be this screen's page header. As a tab it introduces
+          itself the same way the instalments one beside it does: a line of
+          description with its action on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Movimientos que se repiten. Nada se registra hasta que lo confirmes.
+        </p>
+        <Button type="button" onClick={openCreate}>
+          <Plus />
+          Nueva recurrente
+        </Button>
+      </div>
 
       {pending.length > 0 && (
         <Card>

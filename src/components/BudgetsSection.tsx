@@ -14,7 +14,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { BudgetDialog } from "@/components/BudgetDialog";
 import { useAppData } from "@/hooks/useAppData";
 import { calculateBudgetProgress } from "@/lib/finance";
@@ -23,7 +22,7 @@ import { BUDGET_PERIOD_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { BudgetWithCategory, NewBudget } from "@/db";
 
-export function BudgetsView() {
+export function BudgetsSection() {
   const {
     budgets,
     transactions,
@@ -69,21 +68,21 @@ export function BudgetsView() {
   }
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-8">
-      <PageHeader
-        title="Presupuestos"
-        description="Topes de gasto por categoría, mensuales o anuales."
-        actions={
-          <Button
-            type="button"
-            disabled={expenseCategories.length === 0}
-            onClick={openCreate}
-          >
-            <Plus />
-            Nuevo presupuesto
-          </Button>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      {/* This screen's page header, demoted to the tab's own intro row. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Topes de gasto por categoría, mensuales o anuales.
+        </p>
+        <Button
+          type="button"
+          disabled={expenseCategories.length === 0}
+          onClick={openCreate}
+        >
+          <Plus />
+          Nuevo presupuesto
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>

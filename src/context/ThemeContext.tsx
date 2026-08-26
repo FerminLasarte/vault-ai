@@ -6,6 +6,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type ThemePreference = "light" | "dark" | "system";
 
@@ -61,6 +63,30 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolved === "dark");
   }, [resolved]);
+
+  // Everything above only reaches what the app itself draws. The window chrome
+  // is the operating system's, and on Windows that means a title bar that stays
+  // light — with its minimise, maximise and close buttons — above a dark app.
+  // Telling the window which theme it is in makes the system draw that bar to
+  // match. On macOS the bar is an overlay and there is none to repaint, but the
+  // same call keeps the native scrollbars and menus in step.
+  //
+  // `null` for "system" hands the choice back to the OS, which is exactly what
+  // the preference means, rather than pinning the window to whatever the OS
+  // happened to prefer at this moment.
+  //
+  // Requires `core:window:allow-set-theme`, which `core:default` leaves out.
+  useEffect(() => {
+    // The app runs under vitest and in a plain browser during `npm run dev`,
+    // where there is no window to talk to.
+    if (!isTauri()) return;
+
+    // Fire-and-forget: the theme on screen is already correct either way, and a
+    // window that refused the call is not worth interrupting the user over.
+    void getCurrentWindow()
+      .setTheme(preference === "system" ? null : preference)
+      .catch(() => {});
+  }, [preference]);
 
   const setPreference = useCallback((next: ThemePreference) => {
     localStorage.setItem(STORAGE_KEY, next);

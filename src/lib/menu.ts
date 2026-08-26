@@ -1,4 +1,4 @@
-import type { View } from "@/components/layout/Sidebar";
+import type { TabRequest, View } from "@/lib/navigation";
 
 // Event names, mirrored from src-tauri/src/menu.rs.
 export const NAVIGATE_EVENT = "menu://navigate";
@@ -41,8 +41,11 @@ export interface MenuRequest {
 }
 
 // Props every view accepts. Most ignore them; a component that takes no
-// arguments is still assignable here, so only the two views that respond to a
-// menu entry have to declare anything.
+// arguments is still assignable here, so only the views that respond to a menu
+// entry or hold tabs have to declare anything.
 export interface ViewProps {
   request: MenuRequest | null;
+  // Which tab the user asked for, for the views that have them. Null until a
+  // menu entry names one.
+  tab: TabRequest | null;
 }

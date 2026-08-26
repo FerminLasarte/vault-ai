@@ -116,20 +116,24 @@ describe("pendingBadges", () => {
     expect(pendingBadges(sources(), TODAY)).toEqual({});
   });
 
-  it("counts overdue instalments and loan payments in one badge", () => {
-    // Both live in the Deudas section, so two badges there would be one number
-    // split in half for no reason.
+  it("counts everything waiting to be confirmed in one badge", () => {
+    // Recurring movements, instalments and loans all live in Compromisos, so
+    // separate badges there would be one number split three ways for no reason.
     const badges = pendingBadges(
-      sources({ installmentPlans: [aPlan()], loans: [aLoan()] }),
+      sources({
+        installmentPlans: [aPlan()],
+        loans: [aLoan()],
+        recurring: [aRecurring()],
+      }),
       TODAY,
     );
 
-    // July and August for the plan, August for the loan.
-    expect(badges.debts).toBe(3);
+    // July and August for the plan, August for the loan, one recurrence.
+    expect(badges.commitments).toBe(4);
   });
 
   it("counts pending recurring movements", () => {
-    expect(pendingBadges(sources({ recurring: [aRecurring()] }), TODAY).recurring).toBe(
+    expect(pendingBadges(sources({ recurring: [aRecurring()] }), TODAY).commitments).toBe(
       1,
     );
   });
@@ -140,7 +144,8 @@ describe("pendingBadges", () => {
       TODAY,
     );
 
-    expect(badges.budgets).toBe(1);
+    // Budgets are capped categories, so the count rides on that section.
+    expect(badges.categories).toBe(1);
   });
 
   it("stays quiet about a budget that is merely being spent", () => {
@@ -149,7 +154,7 @@ describe("pendingBadges", () => {
       TODAY,
     );
 
-    expect(badges.budgets).toBeUndefined();
+    expect(badges.categories).toBeUndefined();
   });
 
   it("marks only the sections that can be acted on", () => {
@@ -159,7 +164,7 @@ describe("pendingBadges", () => {
     );
 
     // Estadísticas is a summary; sending the user there would be a dead end.
-    expect(Object.keys(badges).sort()).toEqual(["debts", "recurring"]);
+    expect(Object.keys(badges)).toEqual(["commitments"]);
   });
 
   it("says nothing about something not due yet", () => {
@@ -170,6 +175,6 @@ describe("pendingBadges", () => {
       TODAY,
     );
 
-    expect(badges.debts).toBeUndefined();
+    expect(badges.commitments).toBeUndefined();
   });
 });

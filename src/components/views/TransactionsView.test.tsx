@@ -76,7 +76,7 @@ function renderView(transactions: TransactionWithCategory[]) {
     removeTransaction: vi.fn(),
   } as unknown as AppData;
 
-  return render(<TransactionsView request={null} />);
+  return render(<TransactionsView request={null} tab={null} />);
 }
 
 describe("TransactionsView", () => {

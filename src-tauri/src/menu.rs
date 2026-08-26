@@ -16,19 +16,31 @@ const VIEW_PREFIX: &str = "view:";
 pub const NAVIGATE_EVENT: &str = "menu://navigate";
 pub const ACTION_EVENT: &str = "menu://action";
 
-// The views, in sidebar order, paired with the label shown in the menu. The
+// The sections, in sidebar order, paired with the label shown in the menu. The
 // accelerators follow the same order, so Cmd+1 is always the first item in the
 // sidebar and the two never drift apart.
-const VIEWS: [(&str, &str); 9] = [
+const SECTIONS: [(&str, &str); 7] = [
     ("statistics", "Estadísticas"),
     ("transactions", "Transacciones"),
-    ("recurring", "Recurrentes"),
+    ("commitments", "Compromisos"),
     ("categories", "Categorías"),
     ("accounts", "Cuentas"),
-    ("budgets", "Presupuestos"),
-    ("debts", "Deudas"),
     ("savings", "Ahorros"),
     ("settings", "Ajustes"),
+];
+
+// Places that are a tab inside one of the sections above rather than a stop of
+// their own. They are still worth listing: a menu is somewhere to look
+// something up, which is exactly what a surface that had to give up space
+// cannot be.
+//
+// No accelerators, deliberately — Cmd+8 onwards would drift from the sidebar,
+// and these are not the shortcuts anyone reaches for.
+const TABS: [(&str, &str); 4] = [
+    ("analysis", "Análisis"),
+    ("budgets", "Presupuestos"),
+    ("installments", "Compras en cuotas"),
+    ("loans", "Préstamos"),
 ];
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -124,9 +136,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ],
     )?;
 
-    let mut view_items = Vec::with_capacity(VIEWS.len());
-    for (index, (view, label)) in VIEWS.iter().enumerate() {
-        view_items.push(MenuItem::with_id(
+    let mut section_items = Vec::with_capacity(SECTIONS.len());
+    for (index, (view, label)) in SECTIONS.iter().enumerate() {
+        section_items.push(MenuItem::with_id(
             app,
             format!("{VIEW_PREFIX}{view}"),
             *label,
@@ -134,10 +146,27 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             Some(format!("CmdOrCtrl+{}", index + 1)),
         )?);
     }
-    let view_refs: Vec<_> = view_items
-        .iter()
-        .map(|item| item as &dyn tauri::menu::IsMenuItem<R>)
-        .collect();
+
+    let mut tab_items = Vec::with_capacity(TABS.len());
+    for (view, label) in TABS.iter() {
+        tab_items.push(MenuItem::with_id(
+            app,
+            format!("{VIEW_PREFIX}{view}"),
+            *label,
+            true,
+            None::<&str>,
+        )?);
+    }
+
+    let separator = PredefinedMenuItem::separator(app)?;
+    let mut view_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = Vec::new();
+    for item in &section_items {
+        view_refs.push(item);
+    }
+    view_refs.push(&separator);
+    for item in &tab_items {
+        view_refs.push(item);
+    }
     let view_menu = Submenu::with_items(app, "Ver", true, &view_refs)?;
 
     let window_menu = Submenu::with_items(

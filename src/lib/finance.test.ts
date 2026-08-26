@@ -31,6 +31,7 @@ import {
   buildRateLookup,
   convertAtDate,
   yearFromRange,
+  recentMonthsRange,
   yearRange,
   summaryInCurrency,
 } from "@/lib/finance";
@@ -1127,5 +1128,33 @@ describe("availableYears", () => {
 
   it("returns nothing when there are no transactions", () => {
     expect(availableYears([])).toEqual([]);
+  });
+});
+
+describe("recentMonthsRange", () => {
+  it("spans a whole year back, from the first day of the earliest month", () => {
+    // A flow needs a period; this is the one the analysis opens on.
+    expect(recentMonthsRange(12, new Date(2026, 7, 26))).toEqual({
+      from: "2025-09-01",
+      to: "2026-08-26",
+    });
+  });
+
+  it("crosses the year boundary", () => {
+    expect(recentMonthsRange(6, new Date(2026, 1, 15))).toEqual({
+      from: "2025-09-01",
+      to: "2026-02-15",
+    });
+  });
+
+  it("covers only the current month when asked for one", () => {
+    expect(recentMonthsRange(1, new Date(2026, 7, 26))).toEqual({
+      from: "2026-08-01",
+      to: "2026-08-26",
+    });
+  });
+
+  it("is not one whole calendar year, so the year selector does not claim one", () => {
+    expect(yearFromRange(recentMonthsRange(12, new Date(2026, 7, 26)))).toBeNull();
   });
 });
