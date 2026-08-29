@@ -3,6 +3,7 @@ import { Controller } from "react-hook-form";
 import { z } from "zod";
 import { FormDialog } from "@/components/FormDialog";
 import { useDialogForm } from "@/hooks/useDialogForm";
+import { useCategoryTypeSync } from "@/hooks/useCategoryTypeSync";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,6 +46,11 @@ const loanSchema = z.object({
 type LoanFormInput = z.input<typeof loanSchema>;
 type LoanFormValues = z.output<typeof loanSchema>;
 
+// Which categories make sense depends on the direction: repaying what I owe is
+// an expense, being repaid is income.
+const loanCategoryType = (direction: LoanFormInput["direction"]) =>
+  direction === "borrowed" ? "expense" : "income";
+
 const EMPTY_LOAN: LoanFormInput = {
   direction: "borrowed",
   counterparty: "",
@@ -75,13 +81,7 @@ export function LoanDialog({
   paymentMethods,
   onSubmitLoan,
 }: LoanDialogProps) {
-  const {
-    control,
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useDialogForm<LoanFormInput, LoanFormValues>({
+  const form = useDialogForm<LoanFormInput, LoanFormValues>({
     schema: loanSchema,
     open,
     defaultValues: EMPTY_LOAN,
@@ -100,6 +100,14 @@ export function LoanDialog({
         }
       : EMPTY_LOAN,
   });
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const principal = Number(watch("principal")) || 0;
   const annualRate = Number(watch("annualRate")) || 0;
@@ -127,17 +135,18 @@ export function LoanDialog({
     };
   }, [principal, annualRate, count]);
 
-  // Which categories make sense depends on the direction: repaying what I owe
-  // is an expense, being repaid is income.
-  const relevantCategories = useMemo(
-    () =>
-      categories.filter((category) =>
-        direction === "borrowed"
-          ? category.type === "expense"
-          : category.type === "income",
-      ),
-    [categories, direction],
-  );
+  // Declared after `useDialogForm` so the reset that loads a loan runs before
+  // the check inside; see the hook.
+  const relevantCategories = useCategoryTypeSync({
+    form,
+    categories,
+    typeField: "direction",
+    categoryField: "categoryId",
+    categoryTypeFor: loanCategoryType,
+    // The category is optional here — "Sin categoría" is a real answer — so a
+    // selection that no longer fits is dropped rather than replaced.
+    fallback: "none",
+  });
 
   const availableAccounts = useMemo(
     () => paymentMethods.filter((method) => method.currency === currency),

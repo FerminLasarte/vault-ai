@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useCategoryTypeSync } from "@/hooks/useCategoryTypeSync";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import { TagInput } from "@/components/TagInput";
 import type {
   Category,
   CategoryRuleWithCategory,
+  TransactionType,
   Tag,
   NewTransaction,
   PaymentMethod,
@@ -87,6 +89,11 @@ const transactionFormSchema = z
 type TransactionFormInput = z.input<typeof transactionFormSchema>;
 type TransactionFormValues = z.output<typeof transactionFormSchema>;
 
+// A transfer moves money between two accounts of the user's own, so it is
+// neither income nor an expense and takes no category at all.
+const transactionCategoryType = (type: TransactionType) =>
+  type === "transfer" ? null : type;
+
 interface TransactionFormProps {
   categories: Category[];
   categoryRules: CategoryRuleWithCategory[];
@@ -123,19 +130,20 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const isEditing = editing !== null;
 
+  const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
+    resolver: zodResolver(transactionFormSchema),
+    defaultValues: blankForm(defaultCurrency),
+  });
+
   const {
     control,
     register,
     handleSubmit,
     watch,
     setValue,
-    getValues,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<TransactionFormInput, unknown, TransactionFormValues>({
-    resolver: zodResolver(transactionFormSchema),
-    defaultValues: blankForm(defaultCurrency),
-  });
+  } = form;
 
   // Load the transaction being edited, or fall back to a blank form when
   // switching back to create mode.
@@ -182,7 +190,6 @@ export function TransactionForm({
 
   const selectedType = watch("type");
   const typedDescription = watch("description");
-  const selectedCategoryId = watch("categoryId");
   const selectedCurrency = watch("currency");
   const selectedPaymentMethodId = watch("paymentMethodId");
   const selectedDestinationId = watch("destinationPaymentMethodId");
@@ -190,10 +197,18 @@ export function TransactionForm({
 
   const isTransfer = selectedType === "transfer";
 
-  const filteredCategories = useMemo(
-    () => categories.filter((category) => category.type === selectedType),
-    [categories, selectedType],
-  );
+  // Declared after the effect that loads a transaction for editing, so that
+  // reset runs before the check inside; see the hook.
+  const filteredCategories = useCategoryTypeSync({
+    form,
+    categories,
+    typeField: "type",
+    categoryField: "categoryId",
+    categoryTypeFor: transactionCategoryType,
+    // Income and expenses require a category, so one that no longer fits is
+    // replaced rather than left empty.
+    fallback: "first",
+  });
 
   // Only accounts held in the transaction's own currency can pay for it. For a
   // transfer this is the origin side.
@@ -305,40 +320,6 @@ export function TransactionForm({
       ),
     [filteredCategories],
   );
-
-  // Keep the selected category valid whenever the type changes or categories
-  // load, so switching between Gasto and Ingreso cannot leave a category from
-  // the other list selected.
-  //
-  // Everything here is read through `getValues` rather than from the watched
-  // values above, and that is the whole point. The effect that loads a
-  // transaction for editing runs in this same pass and calls `reset`; the
-  // watched values are the render's snapshot, so they still hold whatever the
-  // form had *before* that reset. Judging validity against them found the saved
-  // category missing from a list built for the previous type, decided it was
-  // invalid, and replaced it with the first category on the list — silently
-  // reassigning the category of every transaction that was opened for editing.
-  //
-  // `reset` updates the form's values synchronously, so `getValues` here sees
-  // what was just loaded.
-  useEffect(() => {
-    const currentType = getValues("type");
-
-    if (currentType === "transfer") {
-      setValue("categoryId", null, { shouldValidate: false });
-      return;
-    }
-
-    const available = categories.filter((category) => category.type === currentType);
-    const currentCategoryId = getValues("categoryId");
-    const stillValid = available.some((category) => category.id === currentCategoryId);
-
-    if (!stillValid) {
-      setValue("categoryId", available[0]?.id ?? null, { shouldValidate: false });
-    }
-    // Triggered by the watched values changing, but deliberately read fresh
-    // inside; see above.
-  }, [categories, selectedType, selectedCategoryId, editing, getValues, setValue]);
 
   async function onSubmit(values: TransactionFormValues) {
     const transfer = values.type === "transfer";
