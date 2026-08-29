@@ -3,6 +3,7 @@ import { Controller } from "react-hook-form";
 import { z } from "zod";
 import { FormDialog } from "@/components/FormDialog";
 import { useDialogForm } from "@/hooks/useDialogForm";
+import { useCategoryTypeSync } from "@/hooks/useCategoryTypeSync";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,6 +23,7 @@ import {
 import { todayIsoDate } from "@/lib/format";
 import type {
   Category,
+  CategoryType,
   NewRecurringTransaction,
   PaymentMethod,
   RecurringTransactionWithNames,
@@ -44,6 +46,10 @@ const recurringSchema = z.object({
 type RecurringFormInput = z.input<typeof recurringSchema>;
 type RecurringFormValues = z.output<typeof recurringSchema>;
 
+// A recurring template is either income or an expense, so its own type is
+// already the kind of category it accepts.
+const recurringCategoryType = (type: CategoryType) => type;
+
 interface RecurringDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -61,13 +67,7 @@ export function RecurringDialog({
   paymentMethods,
   onSubmitRecurring,
 }: RecurringDialogProps) {
-  const {
-    control,
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useDialogForm<RecurringFormInput, RecurringFormValues>({
+  const form = useDialogForm<RecurringFormInput, RecurringFormValues>({
     schema: recurringSchema,
     open,
     defaultValues: {
@@ -103,13 +103,28 @@ export function RecurringDialog({
         },
   });
 
-  const selectedType = watch("type");
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
+
   const selectedCurrency = watch("currency");
 
-  const availableCategories = useMemo(
-    () => categories.filter((category) => category.type === selectedType),
-    [categories, selectedType],
-  );
+  // Declared after `useDialogForm` so the reset that loads a template runs
+  // before the check inside; see the hook.
+  const availableCategories = useCategoryTypeSync({
+    form,
+    categories,
+    typeField: "type",
+    categoryField: "categoryId",
+    categoryTypeFor: recurringCategoryType,
+    // The category is optional here — "Sin categoría" is a real answer — so a
+    // selection that no longer fits is dropped rather than replaced.
+    fallback: "none",
+  });
 
   const availableAccounts = useMemo(
     () => paymentMethods.filter((method) => method.currency === selectedCurrency),
