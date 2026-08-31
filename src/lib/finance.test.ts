@@ -19,7 +19,7 @@ import {
   filterByMonth,
   getMonthKeysBetween,
   getRecentMonthKeys,
-  groupExpensesByCategory,
+  groupByCategory,
   sumByType,
   calculateAccountBalances,
   totalBalanceByCurrency,
@@ -199,7 +199,7 @@ describe("filterByCurrency", () => {
   });
 });
 
-describe("groupExpensesByCategory", () => {
+describe("groupByCategory", () => {
   it("sums expense amounts per category and ignores income", () => {
     const transactions = [
       makeTransactionWithCategory({
@@ -227,7 +227,7 @@ describe("groupExpensesByCategory", () => {
         category_color: "#10b981",
       }),
     ];
-    expect(groupExpensesByCategory(transactions)).toEqual([
+    expect(groupByCategory(transactions, "expense")).toEqual([
       { categoryId: 1, name: "Comida", color: "#f97316", total: 50 },
     ]);
   });
@@ -251,7 +251,7 @@ describe("groupExpensesByCategory", () => {
         category_color: "#3b82f6",
       }),
     ];
-    expect(groupExpensesByCategory(transactions).map((entry) => entry.name)).toEqual([
+    expect(groupByCategory(transactions, "expense").map((entry) => entry.name)).toEqual([
       "Transporte",
       "Ocio",
     ]);
@@ -268,7 +268,7 @@ describe("groupExpensesByCategory", () => {
         category_color: null,
       }),
     ];
-    expect(groupExpensesByCategory(transactions)).toEqual([
+    expect(groupByCategory(transactions, "expense")).toEqual([
       { categoryId: null, name: "Sin categoría", color: "#94a3b8", total: 15 },
     ]);
   });
@@ -277,7 +277,7 @@ describe("groupExpensesByCategory", () => {
     const transactions = [
       makeTransactionWithCategory({ id: 1, type: "income", amount: 100 }),
     ];
-    expect(groupExpensesByCategory(transactions)).toEqual([]);
+    expect(groupByCategory(transactions, "expense")).toEqual([]);
   });
 });
 

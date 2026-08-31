@@ -3,6 +3,7 @@ import { pendingBadges } from "./pendingBadges";
 import type { NotificationSources } from "./notifications";
 import type {
   BudgetWithCategory,
+  ExpectedMovementWithNames,
   InstallmentPlanWithNames,
   LoanWithNames,
   RecurringTransactionWithNames,
@@ -16,6 +17,7 @@ function sources(overrides: Partial<NotificationSources> = {}): NotificationSour
     installmentPlans: [],
     loans: [],
     recurring: [],
+    expectedMovements: [],
     budgets: [],
     transactions: [],
     ...overrides,
@@ -109,6 +111,28 @@ function anExpense(amount: number): Transaction {
   };
 }
 
+function anExpected(
+  overrides: Partial<ExpectedMovementWithNames> = {},
+): ExpectedMovementWithNames {
+  return {
+    id: 1,
+    description: "Casamiento",
+    amount: 50_000,
+    type: "expense",
+    currency: "ARS",
+    category_id: null,
+    payment_method_id: null,
+    due_date: "2026-08-20",
+    status: "pending",
+    transaction_id: null,
+    created_at: "2026-08-01T00:00:00.000Z",
+    category_name: null,
+    category_icon: null,
+    payment_method_name: null,
+    ...overrides,
+  };
+}
+
 describe("pendingBadges", () => {
   it("shows nothing when nothing is pending", () => {
     // An app with no commitments must not wear a permanent mark; a badge that
@@ -136,6 +160,24 @@ describe("pendingBadges", () => {
     expect(pendingBadges(sources({ recurring: [aRecurring()] }), TODAY).commitments).toBe(
       1,
     );
+  });
+
+  it("counts an expected movement whose date has arrived", () => {
+    // It shares the badge with the other three because it shares the section
+    // and the gesture: something is waiting for a decision.
+    expect(
+      pendingBadges(sources({ expectedMovements: [anExpected()] }), TODAY).commitments,
+    ).toBe(1);
+  });
+
+  it("ignores expected movements already dealt with or still ahead", () => {
+    const settled = [
+      anExpected({ id: 1, status: "confirmed" }),
+      anExpected({ id: 2, status: "dismissed" }),
+      anExpected({ id: 3, due_date: "2026-12-01" }),
+    ];
+
+    expect(pendingBadges(sources({ expectedMovements: settled }), TODAY)).toEqual({});
   });
 
   it("counts budgets at or over the limit", () => {

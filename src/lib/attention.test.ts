@@ -28,6 +28,7 @@ const CALM = {
   overspent: [],
   backup: { daysAgo: 1, isOverdue: false },
   pendingCount: 0,
+  pendingClose: null,
 };
 
 describe("buildAttentionItems", () => {
@@ -89,13 +90,36 @@ describe("buildAttentionItems", () => {
     expect(item.title).toBe("Tenés 4 movimientos pendientes de confirmar");
   });
 
-  it("orders all three by what it costs to ignore them", () => {
+  it("orders everything by what it costs to ignore it", () => {
     const items = buildAttentionItems({
       overspent: [makeOverspent("Comida", 1.1)],
       backup: { daysAgo: 30, isOverdue: true },
       pendingCount: 2,
+      pendingClose: "2026-07",
     });
 
-    expect(items.map((item) => item.kind)).toEqual(["budget", "backup", "pending"]);
+    // Money already spent, then data that could be lost, then work still to do,
+    // and last the one where nothing is wrong at all.
+    expect(items.map((item) => item.kind)).toEqual([
+      "budget",
+      "backup",
+      "pending",
+      "close",
+    ]);
+  });
+});
+
+describe("the monthly close row", () => {
+  it("names the month and offers the way out", () => {
+    const [item] = buildAttentionItems({ ...CALM, pendingClose: "2026-07" });
+
+    expect(item.kind).toBe("close");
+    expect(item.title).toContain("Julio de 2026");
+    expect(item.actionLabel).toBe("Guardar como PDF");
+  });
+
+  it("is neutral: nothing is wrong, something is ready", () => {
+    const [item] = buildAttentionItems({ ...CALM, pendingClose: "2026-07" });
+    expect(item.tone).toBe("neutral");
   });
 });

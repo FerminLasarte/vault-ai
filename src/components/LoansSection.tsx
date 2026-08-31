@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, HandCoins, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/EmptyState";
+import { ListCard } from "@/components/ListCard";
 import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import {
@@ -284,124 +284,114 @@ export function LoansSection() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Préstamos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
-          ) : loans.length === 0 ? (
-            <EmptyState
-              message="Todavía no cargaste ningún préstamo."
-              actionLabel="Cargar el primero"
-              onAction={openCreate}
-            />
-          ) : (
-            <ul className="flex flex-col gap-5">
-              {loans.map((loan) => {
-                const remaining = outstandingPrincipal(loan);
-                const paidRatio = loan.confirmed_count / loan.installment_count;
-                const isSettled = loan.confirmed_count >= loan.installment_count;
+      <ListCard
+        title="Préstamos"
+        isLoading={isLoading}
+        isEmpty={loans.length === 0}
+        empty={{
+          message: "Todavía no cargaste ningún préstamo.",
+          actionLabel: "Cargar el primero",
+          onAction: openCreate,
+        }}
+      >
+        <ul className="flex flex-col gap-5">
+          {loans.map((loan) => {
+            const remaining = outstandingPrincipal(loan);
+            const paidRatio = loan.confirmed_count / loan.installment_count;
+            const isSettled = loan.confirmed_count >= loan.installment_count;
 
-                return (
-                  <li key={loan.id} className="flex flex-col gap-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <HandCoins className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-sm font-medium">
-                          {loan.description}
-                        </span>
-                        <Badge variant="secondary">
-                          {loan.confirmed_count} / {loan.installment_count}
-                        </Badge>
-                        <Badge variant="outline">
-                          {LOAN_DIRECTION_LABELS[loan.direction]} · {loan.counterparty}
-                        </Badge>
-                        {isSettled && <Badge variant="secondary">Saldado</Badge>}
-                      </div>
+            return (
+              <li key={loan.id} className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <HandCoins className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-medium">
+                      {loan.description}
+                    </span>
+                    <Badge variant="secondary">
+                      {loan.confirmed_count} / {loan.installment_count}
+                    </Badge>
+                    <Badge variant="outline">
+                      {LOAN_DIRECTION_LABELS[loan.direction]} · {loan.counterparty}
+                    </Badge>
+                    {isSettled && <Badge variant="secondary">Saldado</Badge>}
+                  </div>
 
-                      <div className="flex shrink-0 items-center gap-1">
-                        <span
-                          className={cn(
-                            "text-sm tabular-nums",
-                            isSettled
-                              ? "text-muted-foreground"
-                              : directionTone(loan.direction),
-                          )}
-                        >
-                          {formatCurrency(remaining, loan.currency)} pendiente
-                        </span>
-                        <ActionButton
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          label="Ver cronograma"
-                          onClick={() =>
-                            setExpanded((current) =>
-                              current === loan.id ? null : loan.id,
-                            )
-                          }
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "transition-transform",
-                              expanded === loan.id && "rotate-180",
-                            )}
-                          />
-                          <span className="sr-only">
-                            Ver cronograma de {loan.description}
-                          </span>
-                        </ActionButton>
-                        <ActionButton
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          label="Editar"
-                          onClick={() => {
-                            setEditing(loan);
-                            setIsFormOpen(true);
-                          }}
-                        >
-                          <Pencil />
-                          <span className="sr-only">Editar {loan.description}</span>
-                        </ActionButton>
-                        <ActionButton
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          label="Eliminar"
-                          onClick={() => setPendingDeletion(loan)}
-                        >
-                          <Trash2 />
-                          <span className="sr-only">Eliminar {loan.description}</span>
-                        </ActionButton>
-                      </div>
-                    </div>
-
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-[width]"
-                        style={{ width: `${Math.min(paidRatio, 1) * 100}%` }}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span
+                      className={cn(
+                        "text-sm tabular-nums",
+                        isSettled
+                          ? "text-muted-foreground"
+                          : directionTone(loan.direction),
+                      )}
+                    >
+                      {formatCurrency(remaining, loan.currency)} pendiente
+                    </span>
+                    <ActionButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Ver cronograma"
+                      onClick={() =>
+                        setExpanded((current) => (current === loan.id ? null : loan.id))
+                      }
+                    >
+                      <ChevronDown
+                        className={cn(
+                          "transition-transform",
+                          expanded === loan.id && "rotate-180",
+                        )}
                       />
-                    </div>
+                      <span className="sr-only">
+                        Ver cronograma de {loan.description}
+                      </span>
+                    </ActionButton>
+                    <ActionButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Editar"
+                      onClick={() => {
+                        setEditing(loan);
+                        setIsFormOpen(true);
+                      }}
+                    >
+                      <Pencil />
+                      <span className="sr-only">Editar {loan.description}</span>
+                    </ActionButton>
+                    <ActionButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Eliminar"
+                      onClick={() => setPendingDeletion(loan)}
+                    >
+                      <Trash2 />
+                      <span className="sr-only">Eliminar {loan.description}</span>
+                    </ActionButton>
+                  </div>
+                </div>
 
-                    <p className="text-xs text-muted-foreground">
-                      Capital {formatCurrency(loan.principal, loan.currency)} ·{" "}
-                      {loan.annual_rate === 0
-                        ? "sin interés"
-                        : `${loan.annual_rate}% TNA`}{" "}
-                      · primera cuota {formatDate(loan.first_due_date)}
-                    </p>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${Math.min(paidRatio, 1) * 100}%` }}
+                  />
+                </div>
 
-                    {expanded === loan.id && <AmortizationSchedule loan={loan} />}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                <p className="text-xs text-muted-foreground">
+                  Capital {formatCurrency(loan.principal, loan.currency)} ·{" "}
+                  {loan.annual_rate === 0 ? "sin interés" : `${loan.annual_rate}% TNA`} ·
+                  primera cuota {formatDate(loan.first_due_date)}
+                </p>
+
+                {expanded === loan.id && <AmortizationSchedule loan={loan} />}
+              </li>
+            );
+          })}
+        </ul>
+      </ListCard>
 
       <LoanDialog
         open={isFormOpen}

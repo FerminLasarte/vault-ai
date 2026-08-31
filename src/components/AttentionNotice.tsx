@@ -1,16 +1,27 @@
-import { AlertTriangle, HardDriveDownload, Repeat, type LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  FileText,
+  HardDriveDownload,
+  Repeat,
+  type LucideIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AttentionItem, AttentionKind } from "@/lib/attention";
 
 interface AttentionNoticeProps {
   items: AttentionItem[];
+  // What an actionable row does. Keyed by kind rather than passed inside each
+  // item so `attention.ts` stays free of functions and testable as data.
+  onAction?: (kind: AttentionKind) => void;
 }
 
 const ICONS: Record<AttentionKind, LucideIcon> = {
   budget: AlertTriangle,
   backup: HardDriveDownload,
   pending: Repeat,
+  close: FileText,
 };
 
 // One block for everything the screen has to raise, however many things that
@@ -25,7 +36,7 @@ const ICONS: Record<AttentionKind, LucideIcon> = {
 // `border-destructive/50` the three separate notices used to carry only ever
 // set a colour on an edge that was never drawn — it looked deliberate in the
 // markup and did nothing on screen.
-export function AttentionNotice({ items }: AttentionNoticeProps) {
+export function AttentionNotice({ items, onAction }: AttentionNoticeProps) {
   if (items.length === 0) return null;
 
   const hasCritical = items.some((item) => item.tone === "critical");
@@ -49,6 +60,19 @@ export function AttentionNotice({ items }: AttentionNoticeProps) {
               />
               <span className="text-sm font-medium">{item.title}</span>
               <span className="text-sm text-muted-foreground">{item.detail}</span>
+              {/* Pushed to the far end so the buttons of several rows line up,
+                  and after the text so it reads before it offers. */}
+              {item.actionLabel !== undefined && onAction && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => onAction(item.kind)}
+                >
+                  {item.actionLabel}
+                </Button>
+              )}
             </div>
           );
         })}

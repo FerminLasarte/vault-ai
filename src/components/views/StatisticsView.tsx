@@ -3,8 +3,9 @@ import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { PrintableReport } from "@/components/reports/PrintableReport";
+import { PrintableClose } from "@/components/reports/PrintableClose";
+import { PrintableSheet } from "@/components/reports/PrintableSheet";
 import { buildReport } from "@/lib/report";
-import { printWindow } from "@/lib/files";
 import type { ViewProps } from "@/lib/menu";
 import { CurrencyFilter } from "@/components/CurrencyFilter";
 import {
@@ -21,11 +22,12 @@ import { TotalBalanceCard } from "@/components/TotalBalanceCard";
 import { MonthOverviewCards } from "@/components/MonthOverviewCards";
 import { AttentionNotice } from "@/components/AttentionNotice";
 import { RecentTransactions } from "@/components/RecentTransactions";
-import { UpcomingCommitments } from "@/components/UpcomingCommitments";
+import { UpcomingMonths } from "@/components/UpcomingMonths";
 import { ExchangeRateBar } from "@/components/ExchangeRateBar";
 import { CategoryBreakdownChart } from "@/components/charts/CategoryBreakdownChart";
 import { IncomeVsExpenseChart } from "@/components/charts/IncomeVsExpenseChart";
 import { useAppData } from "@/hooks/useAppData";
+import { usePrintRequest } from "@/hooks/usePrintRequest";
 import { Printer } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRequestedTab } from "@/hooks/useRequestedTab";
@@ -47,18 +49,21 @@ import {
   exceededBudgets,
   getMonthKeysBetween,
   getNextMonthKeys,
-  groupExpensesByCategory,
+  groupByCategory,
   summaryInCurrency,
   yearFromRange,
   yearRange,
 } from "@/lib/finance";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { buildAttentionItems } from "@/lib/attention";
+import type { AttentionKind } from "@/lib/attention";
 import { buildMonthOverview } from "@/lib/monthOverview";
-import { projectCommitments } from "@/lib/projection";
+import { buildMonthlyClose, hasClose, lastClosedMonthKey } from "@/lib/monthlyClose";
+import { projectCommitments, projectExpected } from "@/lib/projection";
 import { calculateSavingsProgress } from "@/lib/savings";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
+import { collectPendingExpected } from "@/lib/expected";
 import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { backupStatus } from "@/lib/backupReminder";
 import { todayIsoDate } from "@/lib/format";
@@ -97,12 +102,15 @@ export function StatisticsView({ request, tab }: ViewProps) {
     recurring,
     installmentPlans,
     loans,
+    expectedMovements,
     savingsGoals,
     savingsContributions,
     paymentMethods,
     exchangeRate,
     exchangeRateHistory,
     lastBackupAt,
+    lastSeenClose,
+    markCloseSeen,
     isLoading,
   } = useAppData();
 
@@ -181,14 +189,28 @@ export function StatisticsView({ request, tab }: ViewProps) {
     [recurring, installmentPlans, loans, currency],
   );
 
+  // Deliberately a second projection rather than more fields on the first: see
+  // the note on `projectExpected`. The two totals reach the card apart and are
+  // never summed on the way.
+  const expectedProjection = useMemo(
+    () =>
+      projectExpected(
+        expectedMovements,
+        getNextMonthKeys(PROJECTED_MONTHS, currentMonthKey()),
+        currency,
+      ),
+    [expectedMovements, currency],
+  );
+
   // Every kind of pending commitment is surfaced together: separate notices
   // would make it easy to act on one and never notice the others.
   const pendingCount = useMemo(
     () =>
       collectPendingRecurrences(recurring, todayIsoDate()).length +
       collectPendingInstallments(installmentPlans, todayIsoDate()).length +
-      collectPendingLoanPayments(loans, todayIsoDate()).length,
-    [recurring, installmentPlans, loans],
+      collectPendingLoanPayments(loans, todayIsoDate()).length +
+      collectPendingExpected(expectedMovements, todayIsoDate()).length,
+    [recurring, installmentPlans, loans, expectedMovements],
   );
 
   // Every chart and KPI below reads from this single filtered list, so the
@@ -216,12 +238,48 @@ export function StatisticsView({ request, tab }: ViewProps) {
     [lastBackupAt, transactions.length],
   );
 
-  // One list rather than three independent conditions in the markup: what to
+  // The month that just ended. Always built, whether or not the notice is
+  // showing: the printable document has to exist in the DOM before the print
+  // dialog opens, and building it costs one pass over the history.
+  const closedMonthKey = lastClosedMonthKey();
+
+  const close = useMemo(
+    () => buildMonthlyClose(transactions, closedMonthKey),
+    [transactions, closedMonthKey],
+  );
+
+  // Waiting only while it has something in it and the user has not dealt with
+  // it. Announcing an empty month would be telling them their report on nothing
+  // is ready.
+  // Deliberately independent of the currency the screen is showing: the close
+  // covers every currency, so toggling ARS and USD up there must not make the
+  // notice come and go.
+  const pendingClose =
+    hasClose(transactions, closedMonthKey) && lastSeenClose !== closedMonthKey
+      ? closedMonthKey
+      : null;
+
+  // One list rather than four independent conditions in the markup: what to
   // raise, and in what order, is a decision worth testing on its own.
   const attention = useMemo(
-    () => buildAttentionItems({ overspent, backup, pendingCount }),
-    [overspent, backup, pendingCount],
+    () => buildAttentionItems({ overspent, backup, pendingCount, pendingClose }),
+    [overspent, backup, pendingCount, pendingClose],
   );
+
+  // Which of the two documents is visible to the print engine. It takes the
+  // whole window, so leaving both printable would staple them together.
+  // Two documents share one sheet here: the filtered report the toolbar prints,
+  // and the close the notice offers. Which one is mounted follows the request.
+  const { request: printRequest, requestPrint } = usePrintRequest<"report" | "close">();
+
+  async function handleAttentionAction(kind: AttentionKind) {
+    if (kind !== "close") return;
+    // Marked as dealt with before printing rather than after: the print dialog
+    // never reports whether the user went through with it, and a notice that
+    // reappears because they cancelled once would have no way to ever stop.
+    await markCloseSeen(closedMonthKey);
+    requestPrint("close");
+  }
 
   const report = useMemo(
     () =>
@@ -238,8 +296,12 @@ export function StatisticsView({ request, tab }: ViewProps) {
   useEffect(() => {
     if (request === null || request.seq === lastRequestSeq.current) return;
     lastRequestSeq.current = request.seq;
-    if (request.action === "print-report") void printWindow();
-  }, [request]);
+    // Goes through the same request the toolbar button uses rather than calling
+    // `printWindow` directly: the sheet holds whichever document was last asked
+    // for, so printing without naming one would print the close to a menu entry
+    // that says "Imprimir informe".
+    if (request.action === "print-report") requestPrint("report");
+  }, [request, requestPrint]);
 
   const years = useMemo(() => availableYears(transactions), [transactions]);
 
@@ -273,7 +335,10 @@ export function StatisticsView({ request, tab }: ViewProps) {
     () => summaryInCurrency(filtered, otherCurrency, rateAt),
     [filtered, otherCurrency, rateAt],
   );
-  const categoryBreakdown = useMemo(() => groupExpensesByCategory(filtered), [filtered]);
+  const categoryBreakdown = useMemo(
+    () => groupByCategory(filtered, "expense"),
+    [filtered],
+  );
 
   // The trend spans the selected period, which is always set — so there is no
   // "no range" case left to invent a default for.
@@ -311,7 +376,11 @@ export function StatisticsView({ request, tab }: ViewProps) {
                 tab: both read figures in it, and duplicating the switch inside
                 each one would let the two drift apart. */}
             <CurrencyFilter value={currency} onChange={setCurrency} />
-            <Button type="button" variant="outline" onClick={() => void printWindow()}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => requestPrint("report")}
+            >
               <Printer />
               Imprimir informe
             </Button>
@@ -319,10 +388,15 @@ export function StatisticsView({ request, tab }: ViewProps) {
         }
       />
 
-      {/* Hidden on screen and revealed only by the print stylesheet, so what is
-          printed is built from the same filters the user is looking at rather
-          than from a second set they would have to keep in sync. */}
-      <PrintableReport report={report} />
+      {/* Built from the same figures the user is looking at rather than from a
+          second set they would have to keep in sync. */}
+      <PrintableSheet>
+        {printRequest?.target === "close" ? (
+          <PrintableClose close={close} generatedAt={report.generatedAt} />
+        ) : (
+          <PrintableReport report={report} />
+        )}
+      </PrintableSheet>
 
       <Tabs
         value={currentTab}
@@ -337,7 +411,10 @@ export function StatisticsView({ request, tab }: ViewProps) {
             going, and what they last did. No period to choose, because every
             figure here already answers to one. */}
         <TabsContent value="summary" className="flex flex-col gap-6 pt-6">
-          <AttentionNotice items={attention} />
+          <AttentionNotice
+            items={attention}
+            onAction={(kind) => void handleAttentionAction(kind)}
+          />
 
           <div className="flex flex-col gap-3">
             <h2 className="text-sm font-medium text-muted-foreground">Balance</h2>
@@ -358,8 +435,9 @@ export function StatisticsView({ request, tab }: ViewProps) {
             isLoading={isLoading}
           />
 
-          <UpcomingCommitments
-            months={projection}
+          <UpcomingMonths
+            committed={projection}
+            expected={expectedProjection}
             currency={currency}
             isLoading={isLoading}
           />

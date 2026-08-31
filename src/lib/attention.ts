@@ -1,3 +1,4 @@
+import { formatMonthLabel } from "@/lib/format";
 import type { BackupStatus } from "@/lib/backupReminder";
 import type { BudgetProgress } from "@/lib/finance";
 
@@ -12,7 +13,7 @@ import type { BudgetProgress } from "@/lib/finance";
 
 export type AttentionTone = "critical" | "neutral";
 
-export type AttentionKind = "budget" | "backup" | "pending";
+export type AttentionKind = "budget" | "backup" | "pending" | "close";
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -21,6 +22,10 @@ export interface AttentionItem {
   title: string;
   // What to do about it, or where to go. Never repeats the title.
   detail: string;
+  // When the row can be acted on from where it sits. Only the label lives here:
+  // this module stays data, so what the button *does* is the screen's business
+  // and the wording stays testable without a DOM.
+  actionLabel?: string;
 }
 
 function budgetItem(overspent: BudgetProgress[]): AttentionItem | null {
@@ -67,17 +72,36 @@ function pendingItem(pendingCount: number): AttentionItem | null {
   };
 }
 
+// A month that has finished, has something in it, and has not been dealt with
+// yet. Informational rather than a warning: nothing is wrong, something is
+// ready — which is why it carries a neutral tone and sits last.
+function closeItem(monthKey: string | null): AttentionItem | null {
+  if (monthKey === null) return null;
+
+  return {
+    kind: "close",
+    tone: "neutral",
+    title: `El cierre de ${formatMonthLabel(monthKey)} está listo`,
+    detail: "Ingresos, gastos y la comparación con el mes anterior y el año pasado.",
+    actionLabel: "Guardar como PDF",
+  };
+}
+
 // Ordered by how much it costs to ignore each one: money already spent, then
-// data that could be lost, then work still to do. The order is fixed rather
-// than sorted by tone, so the same situation always reads the same way.
+// data that could be lost, then work still to do, and last the one where
+// nothing is wrong at all. The order is fixed rather than sorted by tone, so
+// the same situation always reads the same way.
 export function buildAttentionItems(sources: {
   overspent: BudgetProgress[];
   backup: BackupStatus;
   pendingCount: number;
+  // The month whose close is ready and unseen, or null when there is none.
+  pendingClose: string | null;
 }): AttentionItem[] {
   return [
     budgetItem(sources.overspent),
     backupItem(sources.backup),
     pendingItem(sources.pendingCount),
+    closeItem(sources.pendingClose),
   ].filter((item): item is AttentionItem => item !== null);
 }

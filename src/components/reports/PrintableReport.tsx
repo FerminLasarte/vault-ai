@@ -1,38 +1,19 @@
+import {
+  CELL,
+  NUMBER,
+  PrintableDocument,
+  Section,
+  Table,
+} from "@/components/reports/primitives";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { CURRENCY_LABELS } from "@/lib/currency";
 import type { Report } from "@/lib/report";
-
-interface SectionProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-function Section({ title, children }: SectionProps) {
-  return (
-    // `break-inside-avoid` keeps a table from being split across two sheets,
-    // which is the difference between a report and a pile of paper.
-    <section className="mt-6 break-inside-avoid">
-      <h2 className="mb-2 text-sm font-semibold tracking-tight">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Table({ children }: { children: React.ReactNode }) {
-  return <table className="w-full border-collapse text-xs">{children}</table>;
-}
-
-const CELL = "border-b border-black/10 py-1 text-left";
-const NUMBER = "border-b border-black/10 py-1 text-right tabular-nums";
 
 interface PrintableReportProps {
   report: Report;
 }
 
-// Deliberately tables rather than the charts on screen. A Recharts SVG sizes
-// itself from its container, which on paper is whatever the print engine
-// decided, and a donut printed in greyscale conveys less than the numbers it
-// was drawn from.
+// Whatever the analysis screen is currently filtered to, on paper.
 export function PrintableReport({ report }: PrintableReportProps) {
   const { filters, summary } = report;
 
@@ -44,21 +25,22 @@ export function PrintableReport({ report }: PrintableReportProps) {
       : "Todo el historial";
 
   return (
-    <div id="printable-report" className="hidden print:block">
-      <header className="border-b border-black/20 pb-3">
-        <h1 className="font-heading text-lg font-semibold tracking-tight">
-          Vault · Informe
-        </h1>
-        <p className="mt-1 text-xs">
-          {period} · {CURRENCY_LABELS[filters.currency] ?? filters.currency}
-          {report.categoryName !== null && ` · ${report.categoryName}`}
-        </p>
-        <p className="text-xs">
-          {report.transactionCount}{" "}
-          {report.transactionCount === 1 ? "movimiento" : "movimientos"}
-        </p>
-      </header>
-
+    <PrintableDocument
+      title="Vault · Informe"
+      generatedAt={report.generatedAt}
+      meta={
+        <>
+          <p className="mt-1 text-xs">
+            {period} · {CURRENCY_LABELS[filters.currency] ?? filters.currency}
+            {report.categoryName !== null && ` · ${report.categoryName}`}
+          </p>
+          <p className="text-xs">
+            {report.transactionCount}{" "}
+            {report.transactionCount === 1 ? "movimiento" : "movimientos"}
+          </p>
+        </>
+      }
+    >
       <Section title="Resumen">
         <Table>
           <tbody>
@@ -168,10 +150,6 @@ export function PrintableReport({ report }: PrintableReportProps) {
           </Table>
         </Section>
       )}
-
-      <footer className="mt-8 border-t border-black/20 pt-2 text-[10px]">
-        Generado el {formatDate(report.generatedAt.slice(0, 10))} · Vault
-      </footer>
-    </div>
+    </PrintableDocument>
   );
 }

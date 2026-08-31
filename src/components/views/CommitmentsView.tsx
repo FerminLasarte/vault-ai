@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionIntro } from "@/components/SectionIntro";
@@ -24,6 +24,8 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoansSection } from "@/components/LoansSection";
+import { ExpectedSection } from "@/components/ExpectedSection";
+import { ListCard } from "@/components/ListCard";
 import { RecurringSection } from "@/components/RecurringSection";
 import { useRequestedTab } from "@/hooks/useRequestedTab";
 import { COMMITMENT_TABS, DEFAULT_COMMITMENT_TAB } from "@/lib/navigation";
@@ -117,6 +119,7 @@ export function CommitmentsView({ tab }: ViewProps) {
           <TabsTrigger value="recurring">Recurrentes</TabsTrigger>
           <TabsTrigger value="installments">Compras en cuotas</TabsTrigger>
           <TabsTrigger value="loans">Préstamos</TabsTrigger>
+          <TabsTrigger value="expected">Previstos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="recurring" className="pt-6">
@@ -224,104 +227,98 @@ export function CommitmentsView({ tab }: ViewProps) {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Compras en cuotas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
-              ) : installmentPlans.length === 0 ? (
-                <div className="flex flex-col items-start gap-3 py-4">
-                  <p className="text-sm text-muted-foreground">
-                    Todavía no cargaste ninguna compra en cuotas.
-                  </p>
-                  <Button type="button" variant="outline" onClick={openCreate}>
-                    <Plus />
-                    Cargar la primera
-                  </Button>
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-5">
-                  {installmentPlans.map((plan) => {
-                    const remaining = outstandingAmount(plan);
-                    const paidRatio = plan.confirmed_count / plan.installment_count;
-                    const isSettled = plan.confirmed_count >= plan.installment_count;
-                    const cost = financingCost(plan);
+          <ListCard
+            title="Compras en cuotas"
+            isLoading={isLoading}
+            isEmpty={installmentPlans.length === 0}
+            empty={{
+              message: "Todavía no cargaste ninguna compra en cuotas.",
+              actionLabel: "Cargar la primera",
+              onAction: openCreate,
+            }}
+          >
+            <ul className="flex flex-col gap-5">
+              {installmentPlans.map((plan) => {
+                const remaining = outstandingAmount(plan);
+                const paidRatio = plan.confirmed_count / plan.installment_count;
+                const isSettled = plan.confirmed_count >= plan.installment_count;
+                const cost = financingCost(plan);
 
-                    return (
-                      <li key={plan.id} className="flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <CreditCard className="size-4 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-sm font-medium">
-                              {plan.description}
-                            </span>
-                            <Badge variant="secondary">
-                              {plan.confirmed_count} / {plan.installment_count}
-                            </Badge>
-                            <Badge variant="outline">{plan.currency}</Badge>
-                            {isSettled && <Badge variant="secondary">Saldada</Badge>}
-                          </div>
+                return (
+                  <li key={plan.id} className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CreditCard className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm font-medium">
+                          {plan.description}
+                        </span>
+                        <Badge variant="secondary">
+                          {plan.confirmed_count} / {plan.installment_count}
+                        </Badge>
+                        <Badge variant="outline">{plan.currency}</Badge>
+                        {isSettled && <Badge variant="secondary">Saldada</Badge>}
+                      </div>
 
-                          <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-sm tabular-nums text-muted-foreground">
-                              {formatCurrency(remaining, plan.currency)} pendiente
-                            </span>
-                            <ActionButton
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              label="Editar"
-                              onClick={() => {
-                                setEditing(plan);
-                                setIsFormOpen(true);
-                              }}
-                            >
-                              <Pencil />
-                              <span className="sr-only">Editar {plan.description}</span>
-                            </ActionButton>
-                            <ActionButton
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              label="Eliminar"
-                              onClick={() => setPendingDeletion(plan)}
-                            >
-                              <Trash2 />
-                              <span className="sr-only">Eliminar {plan.description}</span>
-                            </ActionButton>
-                          </div>
-                        </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className="text-sm tabular-nums text-muted-foreground">
+                          {formatCurrency(remaining, plan.currency)} pendiente
+                        </span>
+                        <ActionButton
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          label="Editar"
+                          onClick={() => {
+                            setEditing(plan);
+                            setIsFormOpen(true);
+                          }}
+                        >
+                          <Pencil />
+                          <span className="sr-only">Editar {plan.description}</span>
+                        </ActionButton>
+                        <ActionButton
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          label="Eliminar"
+                          onClick={() => setPendingDeletion(plan)}
+                        >
+                          <Trash2 />
+                          <span className="sr-only">Eliminar {plan.description}</span>
+                        </ActionButton>
+                      </div>
+                    </div>
 
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                          <div
-                            className="h-full rounded-full bg-primary transition-[width]"
-                            style={{ width: `${Math.min(paidRatio, 1) * 100}%` }}
-                          />
-                        </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${Math.min(paidRatio, 1) * 100}%` }}
+                      />
+                    </div>
 
-                        <p className="text-xs text-muted-foreground">
-                          Total {formatCurrency(plan.total_amount, plan.currency)} ·
-                          primera cuota {formatDate(plan.first_due_date)}
-                          {cost !== null && cost.surcharge > 0 && (
-                            <>
-                              {" · "}
-                              <span className="text-destructive">
-                                {formatCurrency(cost.surcharge, plan.currency)} de recargo
-                                ({formatPercent(cost.ratio)})
-                              </span>
-                            </>
-                          )}
-                          {cost !== null && cost.surcharge === 0 && " · sin interés"}
-                        </p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+                    <p className="text-xs text-muted-foreground">
+                      Total {formatCurrency(plan.total_amount, plan.currency)} · primera
+                      cuota {formatDate(plan.first_due_date)}
+                      {cost !== null && cost.surcharge > 0 && (
+                        <>
+                          {" · "}
+                          <span className="text-destructive">
+                            {formatCurrency(cost.surcharge, plan.currency)} de recargo (
+                            {formatPercent(cost.ratio)})
+                          </span>
+                        </>
+                      )}
+                      {cost !== null && cost.surcharge === 0 && " · sin interés"}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </ListCard>
+        </TabsContent>
+
+        <TabsContent value="expected" className="pt-6">
+          <ExpectedSection />
         </TabsContent>
 
         <TabsContent value="loans" className="pt-6">

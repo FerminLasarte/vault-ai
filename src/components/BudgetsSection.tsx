@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/EmptyState";
+import { ListCard } from "@/components/ListCard";
 import { SectionIntro } from "@/components/SectionIntro";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { ActionButton } from "@/components/ActionButton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,95 +77,86 @@ export function BudgetsSection() {
         disabled={expenseCategories.length === 0}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Periodo actual</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
-          ) : progress.length === 0 ? (
-            <EmptyState
-              message="Todavía no definiste ningún presupuesto."
-              actionLabel="Crear el primero"
-              onAction={openCreate}
-              disabled={expenseCategories.length === 0}
-            />
-          ) : (
-            <ul className="flex flex-col gap-5">
-              {progress.map((entry) => (
-                <li key={entry.budget.id} className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {entry.budget.category_icon} {entry.budget.category_name}
-                      </span>
-                      <Badge variant="outline">
-                        {BUDGET_PERIOD_LABELS[entry.budget.period]}
-                      </Badge>
-                      <Badge variant="outline">{entry.budget.currency}</Badge>
-                      {entry.isExceeded && <Badge variant="destructive">Superado</Badge>}
-                    </div>
+      <ListCard
+        title="Periodo actual"
+        isLoading={isLoading}
+        isEmpty={progress.length === 0}
+        empty={{
+          message: "Todavía no definiste ningún presupuesto.",
+          actionLabel: "Crear el primero",
+          onAction: openCreate,
+          disabled: expenseCategories.length === 0,
+        }}
+      >
+        <ul className="flex flex-col gap-5">
+          {progress.map((entry) => (
+            <li key={entry.budget.id} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium">
+                    {entry.budget.category_icon} {entry.budget.category_name}
+                  </span>
+                  <Badge variant="outline">
+                    {BUDGET_PERIOD_LABELS[entry.budget.period]}
+                  </Badge>
+                  <Badge variant="outline">{entry.budget.currency}</Badge>
+                  {entry.isExceeded && <Badge variant="destructive">Superado</Badge>}
+                </div>
 
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="text-sm tabular-nums text-muted-foreground">
-                        {formatCurrency(entry.spent, entry.budget.currency)} /{" "}
-                        {formatCurrency(entry.budget.amount, entry.budget.currency)}
-                      </span>
-                      <ActionButton
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        label="Editar"
-                        onClick={() => {
-                          setEditing(entry.budget);
-                          setIsFormOpen(true);
-                        }}
-                      >
-                        <Pencil />
-                        <span className="sr-only">
-                          Editar presupuesto de {entry.budget.category_name}
-                        </span>
-                      </ActionButton>
-                      <ActionButton
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        label="Eliminar"
-                        onClick={() => setPendingDeletion(entry.budget)}
-                      >
-                        <Trash2 />
-                        <span className="sr-only">
-                          Eliminar presupuesto de {entry.budget.category_name}
-                        </span>
-                      </ActionButton>
-                    </div>
-                  </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {formatCurrency(entry.spent, entry.budget.currency)} /{" "}
+                    {formatCurrency(entry.budget.amount, entry.budget.currency)}
+                  </span>
+                  <ActionButton
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Editar"
+                    onClick={() => {
+                      setEditing(entry.budget);
+                      setIsFormOpen(true);
+                    }}
+                  >
+                    <Pencil />
+                    <span className="sr-only">
+                      Editar presupuesto de {entry.budget.category_name}
+                    </span>
+                  </ActionButton>
+                  <ActionButton
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Eliminar"
+                    onClick={() => setPendingDeletion(entry.budget)}
+                  >
+                    <Trash2 />
+                    <span className="sr-only">
+                      Eliminar presupuesto de {entry.budget.category_name}
+                    </span>
+                  </ActionButton>
+                </div>
+              </div>
 
-                  <ProgressBar
-                    ratio={entry.ratio}
-                    tone={entry.isExceeded ? "destructive" : "primary"}
-                  />
+              <ProgressBar
+                ratio={entry.ratio}
+                tone={entry.isExceeded ? "destructive" : "primary"}
+              />
 
-                  <p className="text-xs text-muted-foreground">
-                    {entry.isExceeded
-                      ? `Te pasaste por ${formatCurrency(
-                          Math.abs(entry.remaining),
-                          entry.budget.currency,
-                        )}`
-                      : `Te quedan ${formatCurrency(
-                          entry.remaining,
-                          entry.budget.currency,
-                        )}`}
-                    {" · "}
-                    {Math.round(entry.ratio * 100)}%
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              <p className="text-xs text-muted-foreground">
+                {entry.isExceeded
+                  ? `Te pasaste por ${formatCurrency(
+                      Math.abs(entry.remaining),
+                      entry.budget.currency,
+                    )}`
+                  : `Te quedan ${formatCurrency(entry.remaining, entry.budget.currency)}`}
+                {" · "}
+                {Math.round(entry.ratio * 100)}%
+              </p>
+            </li>
+          ))}
+        </ul>
+      </ListCard>
 
       <BudgetDialog
         open={isFormOpen}

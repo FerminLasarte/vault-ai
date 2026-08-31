@@ -4,7 +4,7 @@ import {
   calculateBudgetProgress,
   calculateSummary,
   getMonthKeysBetween,
-  groupExpensesByCategory,
+  groupByCategory,
 } from "@/lib/finance";
 import { parseIsoDate } from "@/lib/format";
 import type {
@@ -94,7 +94,7 @@ export function buildReport(
             ?.name ?? null),
     transactionCount: filtered.length,
     summary: calculateSummary(filtered),
-    byCategory: groupExpensesByCategory(filtered),
+    byCategory: groupByCategory(filtered, "expense"),
     monthly: buildMonthlyTrend(filtered, monthKeysFor(filtered, filters.dateRange)),
     budgets,
     generatedAt: generatedAt.toISOString(),

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { EmptyState } from "@/components/EmptyState";
+import { ListCard } from "@/components/ListCard";
 import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,16 +105,14 @@ export function CategoriesView({ tab }: ViewProps) {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : categories.length === 0 ? (
-            <Card>
-              <CardContent>
-                <EmptyState
-                  message="Todavía no tienes categorías."
-                  actionLabel="Agregar la primera"
-                  onAction={openCreateDialog}
-                  className="py-2"
-                />
-              </CardContent>
-            </Card>
+            <ListCard
+              isEmpty
+              empty={{
+                message: "Todavía no tienes categorías.",
+                actionLabel: "Agregar la primera",
+                onAction: openCreateDialog,
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {grouped.map(({ type, title, items }) => (

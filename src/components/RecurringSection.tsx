@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Pause, Pencil, Play, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/EmptyState";
+import { ListCard } from "@/components/ListCard";
 import { SectionIntro } from "@/components/SectionIntro";
 import { ActionButton } from "@/components/ActionButton";
 import {
@@ -206,97 +206,91 @@ export function RecurringSection() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Plantillas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="py-4 text-sm text-muted-foreground">Cargando...</p>
-          ) : recurring.length === 0 ? (
-            <EmptyState
-              message="Todavía no hay recurrentes. Por ejemplo, el alquiler o el sueldo."
-              actionLabel="Crear la primera"
-              onAction={openCreate}
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {recurring.map((template) => (
-                <li
-                  key={template.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0"
+      <ListCard
+        title="Plantillas"
+        isLoading={isLoading}
+        isEmpty={recurring.length === 0}
+        empty={{
+          message: "Todavía no hay recurrentes. Por ejemplo, el alquiler o el sueldo.",
+          actionLabel: "Crear la primera",
+          onAction: openCreate,
+        }}
+      >
+        <ul className="flex flex-col">
+          {recurring.map((template) => (
+            <li
+              key={template.id}
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0"
+            >
+              <div className="flex min-w-0 flex-col gap-1">
+                <span
+                  className={cn(
+                    "truncate text-sm font-medium",
+                    template.is_active !== 1 && "text-muted-foreground",
+                  )}
                 >
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span
-                      className={cn(
-                        "truncate text-sm font-medium",
-                        template.is_active !== 1 && "text-muted-foreground",
-                      )}
-                    >
-                      {template.description}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary">
-                        {RECURRENCE_FREQUENCY_LABELS[template.frequency]}
-                      </Badge>
-                      <Badge variant="outline">
-                        {TRANSACTION_TYPE_LABELS[template.type]}
-                      </Badge>
-                      <Badge variant="outline">{template.currency}</Badge>
-                      {template.is_active !== 1 && (
-                        <Badge variant="secondary">En pausa</Badge>
-                      )}
-                    </div>
-                  </div>
+                  {template.description}
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="secondary">
+                    {RECURRENCE_FREQUENCY_LABELS[template.frequency]}
+                  </Badge>
+                  <Badge variant="outline">
+                    {TRANSACTION_TYPE_LABELS[template.type]}
+                  </Badge>
+                  <Badge variant="outline">{template.currency}</Badge>
+                  {template.is_active !== 1 && (
+                    <Badge variant="secondary">En pausa</Badge>
+                  )}
+                </div>
+              </div>
 
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span className="text-sm tabular-nums text-muted-foreground">
-                      {formatCurrency(template.amount, template.currency)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      title={template.is_active === 1 ? "Pausar" : "Reanudar"}
-                      disabled={isMutating}
-                      onClick={() => void togglePaused(template)}
-                    >
-                      {template.is_active === 1 ? <Pause /> : <Play />}
-                      <span className="sr-only">
-                        {template.is_active === 1 ? "Pausar" : "Reanudar"}{" "}
-                        {template.description}
-                      </span>
-                    </Button>
-                    <ActionButton
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      label="Editar"
-                      onClick={() => {
-                        setEditing(template);
-                        setIsFormOpen(true);
-                      }}
-                    >
-                      <Pencil />
-                      <span className="sr-only">Editar {template.description}</span>
-                    </ActionButton>
-                    <ActionButton
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      label="Eliminar"
-                      onClick={() => setPendingDeletion(template)}
-                    >
-                      <Trash2 />
-                      <span className="sr-only">Eliminar {template.description}</span>
-                    </ActionButton>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {formatCurrency(template.amount, template.currency)}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title={template.is_active === 1 ? "Pausar" : "Reanudar"}
+                  disabled={isMutating}
+                  onClick={() => void togglePaused(template)}
+                >
+                  {template.is_active === 1 ? <Pause /> : <Play />}
+                  <span className="sr-only">
+                    {template.is_active === 1 ? "Pausar" : "Reanudar"}{" "}
+                    {template.description}
+                  </span>
+                </Button>
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Editar"
+                  onClick={() => {
+                    setEditing(template);
+                    setIsFormOpen(true);
+                  }}
+                >
+                  <Pencil />
+                  <span className="sr-only">Editar {template.description}</span>
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Eliminar"
+                  onClick={() => setPendingDeletion(template)}
+                >
+                  <Trash2 />
+                  <span className="sr-only">Eliminar {template.description}</span>
+                </ActionButton>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </ListCard>
 
       <RecurringDialog
         open={isFormOpen}

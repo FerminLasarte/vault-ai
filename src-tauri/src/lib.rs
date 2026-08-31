@@ -710,6 +710,41 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        // One-off movements the user knows are coming: a wedding in November,
+        // this year's VTV, a bonus in December.
+        //
+        // Deliberately not a recurring template — those already cover anything
+        // that repeats, yearly included — and deliberately not an instalment
+        // plan of one, which is what someone would otherwise reach for: a plan
+        // counts towards `outstandingByCurrency`, so a purchase that has not
+        // happened yet would show up as debt against the user's net worth.
+        //
+        // `status` has three values rather than being a boolean because
+        // deciding against something and going through with it are different
+        // facts, and the app should not lose which one happened.
+        Migration {
+            version: 26,
+            description: "create_expected_movements_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS expected_movements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    amount REAL NOT NULL CHECK (amount > 0),
+                    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+                    currency TEXT NOT NULL,
+                    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                    payment_method_id INTEGER
+                        REFERENCES payment_methods(id) ON DELETE SET NULL,
+                    due_date TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'confirmed', 'dismissed')),
+                    transaction_id INTEGER
+                        REFERENCES transactions(id) ON DELETE SET NULL,
+                    created_at TEXT NOT NULL
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

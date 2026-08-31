@@ -168,6 +168,39 @@ export interface RecurringTransactionWithNames extends RecurringTransaction {
   payment_method_name: string | null;
 }
 
+export type ExpectedMovementStatus = "pending" | "confirmed" | "dismissed";
+
+// A one-off movement the user knows is coming but has not committed to: the
+// wedding in November, this year's VTV, a bonus in December.
+//
+// The line against a recurring template is "does it repeat": anything that
+// happens every month or every year is a template, which already covers the
+// yearly insurance premium. This is for what happens once.
+//
+// Like recurring templates, it records nothing on its own — it only ever waits
+// to be confirmed or dismissed. `transaction_id` is what it became, which
+// unlike an instalment plan is a single unambiguous row, so the link is worth
+// keeping: it makes a confirmation traceable and undoable.
+export interface ExpectedMovement {
+  id: number;
+  description: string;
+  amount: number;
+  type: CategoryType;
+  currency: string;
+  category_id: number | null;
+  payment_method_id: number | null;
+  due_date: string;
+  status: ExpectedMovementStatus;
+  transaction_id: number | null;
+  created_at: string;
+}
+
+export interface ExpectedMovementWithNames extends ExpectedMovement {
+  category_name: string | null;
+  category_icon: string | null;
+  payment_method_name: string | null;
+}
+
 export type BudgetPeriod = "monthly" | "annual";
 
 // A spending cap for one category, in one currency, over one period.

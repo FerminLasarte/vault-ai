@@ -1,5 +1,6 @@
 import type {
   BudgetWithCategory,
+  CategoryType,
   PaymentMethod,
   Transaction,
   TransactionType,
@@ -170,15 +171,20 @@ export interface CategoryBreakdownEntry {
 const UNCATEGORIZED_COLOR = "#94a3b8";
 const UNCATEGORIZED_LABEL = "Sin categoría";
 
-// Sums expense transactions per category, using each category's own stored
-// color so the chart legend stays consistent with the rest of the app.
-export function groupExpensesByCategory(
+// Sums the transactions of one kind per category, using each category's own
+// stored color so the chart legend stays consistent with the rest of the app.
+//
+// Takes the kind rather than assuming expenses: the monthly close reports both
+// sides of the month, and a second copy of this differing by one comparison
+// would be two places to fix the next time "what counts" changes.
+export function groupByCategory(
   transactions: TransactionWithCategory[],
+  type: CategoryType,
 ): CategoryBreakdownEntry[] {
   const totals = new Map<string, CategoryBreakdownEntry>();
 
   for (const transaction of transactions) {
-    if (transaction.type !== "expense") continue;
+    if (transaction.type !== type) continue;
 
     const key =
       transaction.category_id != null ? String(transaction.category_id) : "none";

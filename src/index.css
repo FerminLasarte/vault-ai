@@ -161,11 +161,24 @@
    rule would clip the report to one screenful, so it is undone here — a
    printout has as many pages as it needs. */
 @media print {
+  /* Every ancestor that pins a height or hides its overflow, not just the
+     outermost three: the window is a fixed-height flex column whose main area
+     scrolls, and on paper that clips the document at one screenful and prints
+     the rest as blank space below. The layout is also flattened out of flex,
+     so the document is not laid out as a column beside a sidebar that is not
+     being printed. */
   html,
   body,
-  #root {
+  #root,
+  #root > div,
+  #root > div > main {
     height: auto;
+    max-height: none;
     overflow: visible;
+  }
+
+  #root > div {
+    display: block;
   }
 
   /* Everything except the report itself is interface: the sidebar, the filters,

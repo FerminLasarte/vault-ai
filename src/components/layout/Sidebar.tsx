@@ -3,6 +3,7 @@ import {
   Landmark,
   Tags,
   ArrowLeftRight,
+  FileText,
   Settings,
   CalendarClock,
   PiggyBank,
@@ -70,6 +71,18 @@ const MAIN_ITEMS = [
     label: "Ahorros",
     icon: PiggyBank,
     description: "Tus objetivos, el ritmo que llevás y cuándo llegarías",
+  },
+] as const satisfies ReadonlyArray<NavItem>;
+
+// Somewhere to look something up rather than somewhere work happens, so it sits
+// under a rule instead of at the end of the list: nothing here is ever waiting
+// on the user, and reading it as a seventh stop would suggest it might be.
+const ARCHIVE_ITEMS = [
+  {
+    view: "closes",
+    label: "Cierres",
+    icon: FileText,
+    description: "El resumen de cada mes terminado, listo para guardar en PDF",
   },
 ] as const satisfies ReadonlyArray<NavItem>;
 
@@ -185,6 +198,21 @@ export function Sidebar({ currentView, badges, onNavigate }: SidebarProps) {
 
       <nav className="flex flex-1 flex-col gap-1 px-2 sm:px-3">
         {MAIN_ITEMS.map((item) => (
+          <NavButton
+            key={item.view}
+            item={item}
+            isCurrent={currentView === item.view}
+            pending={badges[item.view]}
+            onNavigate={onNavigate}
+          />
+        ))}
+
+        {/* Inset rather than full-bleed: the rule separates two groups of
+            buttons, so it lines up with them instead of cutting the whole
+            column in half. */}
+        <div className="my-2 border-t border-sidebar-border" />
+
+        {ARCHIVE_ITEMS.map((item) => (
           <NavButton
             key={item.view}
             item={item}

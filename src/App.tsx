@@ -9,6 +9,7 @@ import { CategoriesView } from "@/components/views/CategoriesView";
 import { AccountsView } from "@/components/views/AccountsView";
 import { CommitmentsView } from "@/components/views/CommitmentsView";
 import { SavingsView } from "@/components/views/SavingsView";
+import { ClosesView } from "@/components/views/ClosesView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { Toaster } from "@/components/ui/sonner";
 import { AppDataProvider } from "@/context/AppDataContext";
@@ -32,6 +33,7 @@ const VIEWS: Record<View, (props: ViewProps) => React.JSX.Element> = {
   categories: CategoriesView,
   accounts: AccountsView,
   savings: SavingsView,
+  closes: ClosesView,
   settings: SettingsView,
 };
 
@@ -45,15 +47,16 @@ function SidebarWithBadges({
   currentView: View;
   onNavigate: (view: View) => void;
 }) {
-  const { recurring, installmentPlans, loans, budgets, transactions } = useAppData();
+  const { recurring, installmentPlans, loans, expectedMovements, budgets, transactions } =
+    useAppData();
 
   const badges = useMemo(
     () =>
       pendingBadges(
-        { recurring, installmentPlans, loans, budgets, transactions },
+        { recurring, installmentPlans, loans, expectedMovements, budgets, transactions },
         todayIsoDate(),
       ),
-    [recurring, installmentPlans, loans, budgets, transactions],
+    [recurring, installmentPlans, loans, expectedMovements, budgets, transactions],
   );
 
   return <Sidebar currentView={currentView} badges={badges} onNavigate={onNavigate} />;

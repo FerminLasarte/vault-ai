@@ -12,12 +12,20 @@ export type View =
   | "categories"
   | "accounts"
   | "savings"
+  // Sits apart in the sidebar, under a rule: it is somewhere to look something
+  // up rather than somewhere work happens, which is what the six above it are.
+  | "closes"
   | "settings";
 
 // The tabs of the two views that hold more than one section. Kept here rather
 // than inside each view so the menu can be checked against them at build time:
 // a destination naming a tab that does not exist is a type error.
-export const COMMITMENT_TABS = ["recurring", "installments", "loans"] as const;
+export const COMMITMENT_TABS = [
+  "recurring",
+  "installments",
+  "loans",
+  "expected",
+] as const;
 export type CommitmentTab = (typeof COMMITMENT_TABS)[number];
 
 export const CATEGORY_TABS = ["categories", "budgets"] as const;
@@ -55,11 +63,13 @@ export const MENU_VIEW_IDS = [
   "categories",
   "accounts",
   "savings",
+  "closes",
   "settings",
   "budgets",
   "installments",
   "loans",
   "analysis",
+  "expected",
 ] as const;
 
 export type MenuViewId = (typeof MENU_VIEW_IDS)[number];
@@ -71,11 +81,13 @@ export const MENU_DESTINATIONS: Record<MenuViewId, Destination> = {
   categories: { view: "categories" },
   accounts: { view: "accounts" },
   savings: { view: "savings" },
+  closes: { view: "closes" },
   settings: { view: "settings" },
   budgets: { view: "categories", tab: "budgets" },
   installments: { view: "commitments", tab: "installments" },
   loans: { view: "commitments", tab: "loans" },
   analysis: { view: "statistics", tab: "analysis" },
+  expected: { view: "commitments", tab: "expected" },
 };
 
 export function isMenuViewId(value: unknown): value is MenuViewId {

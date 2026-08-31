@@ -19,13 +19,14 @@ pub const ACTION_EVENT: &str = "menu://action";
 // The sections, in sidebar order, paired with the label shown in the menu. The
 // accelerators follow the same order, so Cmd+1 is always the first item in the
 // sidebar and the two never drift apart.
-const SECTIONS: [(&str, &str); 7] = [
+const SECTIONS: [(&str, &str); 8] = [
     ("statistics", "Estadísticas"),
     ("transactions", "Transacciones"),
     ("commitments", "Compromisos"),
     ("categories", "Categorías"),
     ("accounts", "Cuentas"),
     ("savings", "Ahorros"),
+    ("closes", "Cierres"),
     ("settings", "Ajustes"),
 ];
 
@@ -36,9 +37,10 @@ const SECTIONS: [(&str, &str); 7] = [
 //
 // No accelerators, deliberately — Cmd+8 onwards would drift from the sidebar,
 // and these are not the shortcuts anyone reaches for.
-const TABS: [(&str, &str); 4] = [
+const TABS: [(&str, &str); 5] = [
     ("analysis", "Análisis"),
     ("budgets", "Presupuestos"),
+    ("expected", "Previstos"),
     ("installments", "Compras en cuotas"),
     ("loans", "Préstamos"),
 ];

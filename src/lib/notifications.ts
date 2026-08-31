@@ -1,10 +1,13 @@
-import { calculateBudgetProgress, budgetPeriodKey } from "@/lib/finance";
+import { calculateBudgetProgress, budgetPeriodKey, filterByMonth } from "@/lib/finance";
+import { collectPendingExpected } from "@/lib/expected";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
 import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
-import { formatCurrency, formatDate, parseIsoDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthLabel, parseIsoDate } from "@/lib/format";
+import { lastClosedMonthKey } from "@/lib/monthlyClose";
 import type {
   BudgetWithCategory,
+  ExpectedMovementWithNames,
   InstallmentPlanWithNames,
   LoanWithNames,
   RecurringTransactionWithNames,
@@ -29,6 +32,7 @@ export interface NotificationSources {
   installmentPlans: InstallmentPlanWithNames[];
   loans: LoanWithNames[];
   recurring: RecurringTransactionWithNames[];
+  expectedMovements: ExpectedMovementWithNames[];
   budgets: BudgetWithCategory[];
   transactions: Transaction[];
 }
@@ -42,6 +46,21 @@ export function pendingNotifications(
 ): AppNotification[] {
   const notifications: AppNotification[] = [];
 
+  // The month that just ended, if anything happened in it.
+  //
+  // Deliberately not filtered by currency: this only says the close is ready,
+  // and which currency to read it in is chosen inside the app. The id carries
+  // the month, so `decideNotifications` announces each one exactly once and
+  // never again — no separate "already told them" bookkeeping needed here.
+  const closedMonth = lastClosedMonthKey(parseIsoDate(today));
+  if (filterByMonth(sources.transactions, closedMonth).length > 0) {
+    notifications.push({
+      id: `monthly-close:${closedMonth}`,
+      title: "Tu cierre de mes está listo",
+      body: `${formatMonthLabel(closedMonth)} · ingresos, gastos y la comparación con el mes anterior y el año pasado`,
+    });
+  }
+
   for (const entry of collectPendingInstallments(sources.installmentPlans, today)) {
     notifications.push({
       id: `installment:${entry.plan.id}:${entry.index}`,
@@ -50,6 +69,23 @@ export function pendingNotifications(
         entry.amount,
         entry.plan.currency,
       )} · venció el ${formatDate(entry.date)}`,
+    });
+  }
+
+  // Worded as a reminder rather than as a debt: unlike an instalment, nothing
+  // is owed here. The date the user themselves picked has simply arrived, and
+  // the only thing being asked is whether it happened.
+  for (const movement of collectPendingExpected(sources.expectedMovements, today)) {
+    notifications.push({
+      // The due date is part of the id for the same reason the instalment
+      // number is part of its own: editing the date makes it a different fact,
+      // and the new one deserves to be announced.
+      id: `expected:${movement.id}:${movement.due_date}`,
+      title: "Llegó algo que tenías previsto",
+      body: `${movement.description} · ${formatCurrency(
+        movement.amount,
+        movement.currency,
+      )} · era para el ${formatDate(movement.due_date)}`,
     });
   }
 

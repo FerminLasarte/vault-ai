@@ -1,8 +1,10 @@
 import type {
+  ExpectedMovementWithNames,
   InstallmentPlanWithNames,
   LoanWithNames,
   RecurringTransactionWithNames,
 } from "@/db/schema";
+import { expectedInWindow } from "@/lib/expected";
 import { installmentAmounts, installmentDueDate } from "@/lib/installments";
 import { amortizationSchedule } from "@/lib/loans";
 import { occurrencesBetween } from "@/lib/recurring";
@@ -151,5 +153,26 @@ export function projectCommitments(
       income: recurring.income + loans.income,
       expenses: recurring.expenses + loans.expenses + installments,
     };
+  });
+}
+
+// The same months, read from what the user says is coming rather than from what
+// they signed.
+//
+// A separate function rather than a fourth source inside `projectCommitments`,
+// which would have meant widening `ProjectedMonth` with two more fields and
+// making the function above return things it spends its header explaining that
+// it excludes. Kept apart, the two totals cannot be added together by accident
+// somewhere downstream, and the screen decides how to present them.
+export function projectExpected(
+  movements: ExpectedMovementWithNames[],
+  monthKeys: string[],
+  currency: string,
+): ProjectedMonth[] {
+  return monthKeys.map((monthKey) => {
+    const { from, to } = monthWindow(monthKey);
+    const { income, expenses } = expectedInWindow(movements, currency, from, to);
+
+    return { monthKey, income, expenses };
   });
 }

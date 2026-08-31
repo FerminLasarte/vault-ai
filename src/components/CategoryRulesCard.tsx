@@ -1,18 +1,11 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { Pencil, Trash2, Wand2 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/ActionButton";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ListCard } from "@/components/ListCard";
 import { FormDialog } from "@/components/FormDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,78 +74,62 @@ export function CategoryRulesCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Reglas de categorización</CardTitle>
-        <CardDescription>
-          Cuando la descripción contenga el texto de una regla, la categoría se completa
-          sola. Si varias coinciden, gana la más específica.
-        </CardDescription>
-      </CardHeader>
+    <>
+      <ListCard
+        title="Reglas de categorización"
+        description="Cuando la descripción contenga el texto de una regla, la categoría se completa sola. Si varias coinciden, gana la más específica."
+        isEmpty={categoryRules.length === 0}
+        empty={{
+          message: "Todavía no hay reglas. Por ejemplo, «netflix» → Ocio.",
+          actionLabel: "Nueva regla",
+          onAction: openCreate,
+          disabled: categories.length === 0,
+          // The only way to add a rule: this card has no SectionIntro above it.
+          persistent: true,
+        }}
+      >
+        <ul className="flex flex-col">
+          {categoryRules.map((rule) => (
+            <li
+              key={rule.id}
+              className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Wand2 className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">{rule.pattern}</span>
+                <span className="text-muted-foreground">→</span>
+                <Badge variant="secondary">
+                  {rule.category_icon} {rule.category_name}
+                </Badge>
+              </div>
 
-      <CardContent className="flex flex-col gap-4">
-        {categoryRules.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              Todavía no hay reglas. Por ejemplo, «netflix» → Ocio.
-            </p>
-          </div>
-        ) : (
-          <ul className="flex flex-col">
-            {categoryRules.map((rule) => (
-              <li
-                key={rule.id}
-                className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <Wand2 className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-sm font-medium">{rule.pattern}</span>
-                  <span className="text-muted-foreground">→</span>
-                  <Badge variant="secondary">
-                    {rule.category_icon} {rule.category_name}
-                  </Badge>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  <ActionButton
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    label="Editar"
-                    onClick={() => openEdit(rule)}
-                  >
-                    <Pencil />
-                    <span className="sr-only">Editar regla {rule.pattern}</span>
-                  </ActionButton>
-                  <ActionButton
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    label="Eliminar"
-                    disabled={isMutating}
-                    onClick={() => void removeCategoryRule(rule.id)}
-                  >
-                    <Trash2 />
-                    <span className="sr-only">Eliminar regla {rule.pattern}</span>
-                  </ActionButton>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={categories.length === 0}
-            onClick={openCreate}
-          >
-            <Plus />
-            Nueva regla
-          </Button>
-        </div>
-      </CardContent>
+              <div className="flex shrink-0 items-center gap-1">
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Editar"
+                  onClick={() => openEdit(rule)}
+                >
+                  <Pencil />
+                  <span className="sr-only">Editar regla {rule.pattern}</span>
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Eliminar"
+                  disabled={isMutating}
+                  onClick={() => void removeCategoryRule(rule.id)}
+                >
+                  <Trash2 />
+                  <span className="sr-only">Eliminar regla {rule.pattern}</span>
+                </ActionButton>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </ListCard>
 
       <FormDialog
         open={isOpen}
@@ -201,6 +178,6 @@ export function CategoryRulesCard() {
           )}
         </div>
       </FormDialog>
-    </Card>
+    </>
   );
 }

@@ -2,15 +2,9 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/EmptyState";
+import { ListCard } from "@/components/ListCard";
 import { ActionButton } from "@/components/ActionButton";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -191,79 +185,71 @@ export function AccountsView() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cuentas y métodos de pago</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando...</p>
-          ) : paymentMethods.length === 0 ? (
-            <EmptyState
-              message="Todavía no tienes cuentas registradas."
-              actionLabel="Agregar la primera"
-              onAction={openCreateDialog}
-              className="py-6"
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {paymentMethods.map((method) => (
-                <li
-                  key={method.id}
-                  className="flex items-center gap-4 border-b border-border py-3 last:border-0"
-                >
-                  {/* The name column takes the slack rather than the row
+      <ListCard
+        title="Cuentas y métodos de pago"
+        isLoading={isLoading}
+        isEmpty={paymentMethods.length === 0}
+        empty={{
+          message: "Todavía no tienes cuentas registradas.",
+          actionLabel: "Agregar la primera",
+          onAction: openCreateDialog,
+        }}
+      >
+        <ul className="flex flex-col">
+          {paymentMethods.map((method) => (
+            <li
+              key={method.id}
+              className="flex items-center gap-4 border-b border-border py-3 last:border-0"
+            >
+              {/* The name column takes the slack rather than the row
                       distributing it: with `justify-between` the amount sat
                       wherever each account name happened to end, so the column
                       came out ragged from one row to the next. */}
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate text-sm font-medium">{method.name}</span>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary">
-                        {PAYMENT_METHOD_TYPE_LABELS[method.type]}
-                      </Badge>
-                      <Badge variant="outline">{method.currency}</Badge>
-                    </div>
-                  </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate text-sm font-medium">{method.name}</span>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="secondary">
+                    {PAYMENT_METHOD_TYPE_LABELS[method.type]}
+                  </Badge>
+                  <Badge variant="outline">{method.currency}</Badge>
+                </div>
+              </div>
 
-                  <span
-                    className={cn(
-                      "shrink-0 text-right text-sm font-medium tabular-nums",
-                      (balances.get(method.id) ?? 0) < 0 &&
-                        "text-red-600 dark:text-red-400",
-                    )}
-                  >
-                    {formatCurrency(balances.get(method.id) ?? 0, method.currency)}
-                  </span>
+              <span
+                className={cn(
+                  "shrink-0 text-right text-sm font-medium tabular-nums",
+                  (balances.get(method.id) ?? 0) < 0 && "text-red-600 dark:text-red-400",
+                )}
+              >
+                {formatCurrency(balances.get(method.id) ?? 0, method.currency)}
+              </span>
 
-                  <div className="flex shrink-0 items-center gap-1">
-                    <ActionButton
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      label="Editar"
-                      onClick={() => openEditDialog(method)}
-                    >
-                      <Pencil />
-                      <span className="sr-only">Editar {method.name}</span>
-                    </ActionButton>
-                    <ActionButton
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      label="Eliminar"
-                      onClick={() => setPendingDeletion(method)}
-                    >
-                      <Trash2 />
-                      <span className="sr-only">Eliminar {method.name}</span>
-                    </ActionButton>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              <div className="flex shrink-0 items-center gap-1">
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Editar"
+                  onClick={() => openEditDialog(method)}
+                >
+                  <Pencil />
+                  <span className="sr-only">Editar {method.name}</span>
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  label="Eliminar"
+                  onClick={() => setPendingDeletion(method)}
+                >
+                  <Trash2 />
+                  <span className="sr-only">Eliminar {method.name}</span>
+                </ActionButton>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </ListCard>
 
       <PaymentMethodDialog
         open={isFormOpen}

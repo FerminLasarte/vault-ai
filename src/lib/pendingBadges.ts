@@ -1,4 +1,5 @@
 import { calculateBudgetProgress } from "@/lib/finance";
+import { collectPendingExpected } from "@/lib/expected";
 import { collectPendingInstallments } from "@/lib/pendingInstallments";
 import { collectPendingLoanPayments } from "@/lib/pendingLoans";
 import { collectPendingRecurrences } from "@/lib/pendingRecurring";
@@ -23,13 +24,15 @@ export function pendingBadges(
 ): PendingBadges {
   const badges: PendingBadges = {};
 
-  // Recurring movements, instalments and loan payments are all confirmed the
-  // same way and now share a section, so they share a badge: what the user
-  // needs to know is how many things are waiting, not how they are filed.
+  // Recurring movements, instalments, loan payments and expected movements are
+  // all confirmed the same way and share a section, so they share a badge: what
+  // the user needs to know is how many things are waiting, not how they are
+  // filed.
   const commitments =
     collectPendingRecurrences(sources.recurring, today).length +
     collectPendingInstallments(sources.installmentPlans, today).length +
-    collectPendingLoanPayments(sources.loans, today).length;
+    collectPendingLoanPayments(sources.loans, today).length +
+    collectPendingExpected(sources.expectedMovements, today).length;
   if (commitments > 0) badges.commitments = commitments;
 
   // Budgets moved in with the categories they cap, so this count rides on that

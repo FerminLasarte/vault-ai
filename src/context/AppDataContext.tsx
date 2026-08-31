@@ -26,6 +26,7 @@ import {
   getLatestExchangeRate,
   getSetting,
   LAST_BACKUP_AT,
+  LAST_SEEN_CLOSE,
   initDatabase,
   insertAttachment,
   insertBudget,
@@ -46,6 +47,11 @@ import {
   listSavingsContributions,
   listSavingsGoals,
   listExchangeRates,
+  listExpectedMovements,
+  insertExpectedMovement,
+  updateExpectedMovement,
+  deleteExpectedMovement,
+  closeExpectedMovement,
   listRecurringTransactions,
   listCategoryRules,
   listPaymentMethods,
@@ -69,6 +75,7 @@ import {
   type Category,
   type CategoryRuleWithCategory,
   type ExchangeRate,
+  type ExpectedMovementWithNames,
   type NewAttachment,
   type InstallmentPlanWithNames,
   type LoanWithNames,
@@ -82,6 +89,7 @@ import {
   type NewRecurringTransaction,
   type NewCategory,
   type NewPaymentMethod,
+  type NewExpectedMovement,
   type NewTransaction,
   type PaymentMethod,
   type RecurringTransactionWithNames,
@@ -109,6 +117,7 @@ export interface AppData {
   recurring: RecurringTransactionWithNames[];
   installmentPlans: InstallmentPlanWithNames[];
   loans: LoanWithNames[];
+  expectedMovements: ExpectedMovementWithNames[];
   savingsGoals: SavingsGoalWithNames[];
   savingsContributions: SavingsContribution[];
   // Latest known MEP quote, or null before the very first successful fetch.
@@ -122,6 +131,9 @@ export interface AppData {
   exchangeRateHistory: ExchangeRate[];
   // When the last backup was taken, or null if there has never been one.
   lastBackupAt: string | null;
+  // The last month whose close the user acted on, so the notice can stop
+  // asking about it. Null until they deal with their first one.
+  lastSeenClose: string | null;
   // Whether the app may raise system notifications. Persisted, so turning them
   // off is a decision and not something that resets on the next launch.
   notificationsEnabled: boolean;
@@ -190,6 +202,17 @@ export interface AppData {
   addAttachment: (attachment: NewAttachment) => Promise<void>;
   removeAttachment: (id: number) => Promise<void>;
 
+  addExpected: (movement: NewExpectedMovement) => Promise<void>;
+  editExpected: (id: number, movement: NewExpectedMovement) => Promise<void>;
+  removeExpected: (id: number) => Promise<void>;
+  // Records the movement as having happened: writes the real transaction and
+  // keeps its id, so the two never drift and a mistaken confirmation can be
+  // traced back.
+  confirmExpected: (id: number) => Promise<void>;
+  // Decides against it. Nothing is recorded, and it stops being proposed —
+  // which is the same gesture `dismissRecurring` offers, for the same reason.
+  dismissExpected: (id: number) => Promise<void>;
+
   addBudget: (budget: NewBudget) => Promise<void>;
   editBudget: (id: number, budget: NewBudget) => Promise<void>;
   removeBudget: (id: number) => Promise<void>;
@@ -215,6 +238,9 @@ export interface AppData {
   // Called after a backup actually lands on disk, so the reminder measures
   // real copies rather than attempts.
   recordBackup: () => Promise<void>;
+  // Records that a month's close has been dealt with. Takes the month rather
+  // than assuming the latest, so acting on an older one still settles it.
+  markCloseSeen: (monthKey: string) => Promise<void>;
   setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 }
 
@@ -233,6 +259,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [],
   );
   const [loans, setLoans] = useState<LoanWithNames[]>([]);
+  const [expectedMovements, setExpectedMovements] = useState<ExpectedMovementWithNames[]>(
+    [],
+  );
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoalWithNames[]>([]);
   const [savingsContributions, setSavingsContributions] = useState<SavingsContribution[]>(
     [],
@@ -241,6 +270,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [exchangeRateHistory, setExchangeRateHistory] = useState<ExchangeRate[]>([]);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const [lastSeenClose, setLastSeenClose] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
@@ -266,11 +296,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       nextRecurring,
       nextPlans,
       nextLoans,
+      nextExpected,
       nextGoals,
       nextContributions,
       cachedRate,
       cachedHistory,
       storedLastBackup,
+      storedSeenClose,
       storedNotifications,
     ] = await Promise.all([
       listTransactionsWithCategory(),
@@ -282,11 +314,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       listRecurringTransactions(),
       listInstallmentPlans(),
       listLoans(),
+      listExpectedMovements(),
       listSavingsGoals(),
       listSavingsContributions(),
       getLatestExchangeRate(activeRateType),
       listExchangeRates(activeRateType),
       getSetting(LAST_BACKUP_AT),
+      getSetting(LAST_SEEN_CLOSE),
       getSetting(NOTIFICATIONS_ENABLED),
     ]);
     setTransactions(nextTransactions);
@@ -298,12 +332,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setRecurring(nextRecurring);
     setInstallmentPlans(nextPlans);
     setLoans(nextLoans);
+    setExpectedMovements(nextExpected);
     setSavingsGoals(nextGoals);
     setSavingsContributions(nextContributions);
     setRateTypeState(activeRateType);
     setExchangeRate(cachedRate);
     setExchangeRateHistory(cachedHistory);
     setLastBackupAt(storedLastBackup);
+    setLastSeenClose(storedSeenClose);
     // Absent means "never chosen", and the useful default is on.
     setNotificationsEnabledState(storedNotifications !== "false");
   }, []);
@@ -359,6 +395,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const setNotificationsEnabled = useCallback(async (enabled: boolean) => {
     await setSetting(NOTIFICATIONS_ENABLED, enabled ? "true" : "false");
     setNotificationsEnabledState(enabled);
+  }, []);
+
+  const markCloseSeen = useCallback(async (monthKey: string) => {
+    await setSetting(LAST_SEEN_CLOSE, monthKey);
+    setLastSeenClose(monthKey);
   }, []);
 
   const recordBackup = useCallback(async () => {
@@ -470,12 +511,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       recurring,
       installmentPlans,
       loans,
+      expectedMovements,
       savingsGoals,
       savingsContributions,
       rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
+      lastSeenClose,
       notificationsEnabled,
       isLoading,
       isMutating,
@@ -486,6 +529,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       saveManualExchangeRate,
       backfillExchangeRates,
       recordBackup,
+      markCloseSeen,
       setNotificationsEnabled,
 
       addTransaction: (transaction, transactionTags) =>
@@ -695,6 +739,56 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           "No se pudo eliminar el comprobante",
         ),
 
+      addExpected: (movement) =>
+        runMutation(
+          () => insertExpectedMovement(movement),
+          "Movimiento previsto creado",
+          "No se pudo crear el movimiento previsto",
+        ),
+      editExpected: (id, movement) =>
+        runMutation(
+          () => updateExpectedMovement(id, movement),
+          "Movimiento previsto actualizado",
+          "No se pudo actualizar el movimiento previsto",
+        ),
+      removeExpected: (id) =>
+        runMutation(
+          () => deleteExpectedMovement(id),
+          "Movimiento previsto eliminado",
+          "No se pudo eliminar el movimiento previsto",
+        ),
+      confirmExpected: (id) =>
+        runMutation(
+          async () => {
+            const movement = expectedMovements.find((entry) => entry.id === id);
+            if (!movement) return;
+
+            // Dated the day it was due rather than today: the user is recording
+            // that the thing they foresaw happened, and moving it to whenever
+            // they got around to confirming would put it in the wrong month.
+            const transactionId = await insertTransaction({
+              amount: movement.amount,
+              type: movement.type,
+              currency: movement.currency,
+              categoryId: movement.category_id,
+              paymentMethodId: movement.payment_method_id,
+              destinationPaymentMethodId: null,
+              destinationAmount: null,
+              description: movement.description,
+              date: movement.due_date,
+            });
+            await closeExpectedMovement(id, "confirmed", transactionId);
+          },
+          "Movimiento registrado",
+          "No se pudo registrar el movimiento",
+        ),
+      dismissExpected: (id) =>
+        runMutation(
+          () => closeExpectedMovement(id, "dismissed", null),
+          "Movimiento descartado",
+          "No se pudo descartar el movimiento",
+        ),
+
       addBudget: (budget) =>
         runMutation(
           () => insertBudget(budget),
@@ -781,12 +875,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       recurring,
       installmentPlans,
       loans,
+      expectedMovements,
       savingsGoals,
       savingsContributions,
       rateType,
       exchangeRate,
       exchangeRateHistory,
       lastBackupAt,
+      lastSeenClose,
       notificationsEnabled,
       isLoading,
       isMutating,
@@ -796,6 +892,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       saveManualExchangeRate,
       backfillExchangeRates,
       recordBackup,
+      markCloseSeen,
       setNotificationsEnabled,
       runMutation,
     ],
@@ -808,7 +905,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useNotifications({
     enabled: notificationsEnabled,
     ready: !isLoading,
-    sources: { installmentPlans, loans, recurring, budgets, transactions },
+    sources: {
+      installmentPlans,
+      loans,
+      recurring,
+      expectedMovements,
+      budgets,
+      transactions,
+    },
   });
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

@@ -7,6 +7,7 @@ import type {
   CategoryRuleWithCategory,
   CategoryType,
   ExchangeRate,
+  ExpectedMovementWithNames,
   PaymentMethod,
   PaymentMethodType,
   NewTransaction,
@@ -677,6 +678,106 @@ export async function markRecurringConfirmed(id: number, date: string): Promise<
   );
 }
 
+// Soonest first: the list is a queue of what is coming, and the thing that is
+// coming next is the one worth looking at.
+export async function listExpectedMovements(): Promise<ExpectedMovementWithNames[]> {
+  const db = await getDb();
+  return db.select<ExpectedMovementWithNames[]>(
+    `SELECT e.*,
+            c.name AS category_name,
+            c.icon AS category_icon,
+            p.name AS payment_method_name
+     FROM expected_movements e
+     LEFT JOIN categories c ON c.id = e.category_id
+     LEFT JOIN payment_methods p ON p.id = e.payment_method_id
+     ORDER BY e.due_date, e.id`,
+  );
+}
+
+export interface NewExpectedMovement {
+  description: string;
+  amount: number;
+  type: CategoryType;
+  currency: string;
+  categoryId: number | null;
+  // Optional on purpose: knowing a cost is coming does not mean having decided
+  // which account it will come out of.
+  paymentMethodId: number | null;
+  dueDate: string;
+}
+
+export async function insertExpectedMovement(
+  movement: NewExpectedMovement,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO expected_movements
+       (description, amount, type, currency, category_id, payment_method_id,
+        due_date, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      movement.description,
+      movement.amount,
+      movement.type,
+      movement.currency,
+      movement.categoryId,
+      movement.paymentMethodId,
+      movement.dueDate,
+      new Date().toISOString(),
+    ],
+  );
+}
+
+// Editing leaves `status` and `transaction_id` alone: they record what happened
+// to the movement, which is not something the form is editing.
+export async function updateExpectedMovement(
+  id: number,
+  movement: NewExpectedMovement,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE expected_movements
+     SET description = $1,
+         amount = $2,
+         type = $3,
+         currency = $4,
+         category_id = $5,
+         payment_method_id = $6,
+         due_date = $7
+     WHERE id = $8`,
+    [
+      movement.description,
+      movement.amount,
+      movement.type,
+      movement.currency,
+      movement.categoryId,
+      movement.paymentMethodId,
+      movement.dueDate,
+      id,
+    ],
+  );
+}
+
+export async function deleteExpectedMovement(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM expected_movements WHERE id = $1", [id]);
+}
+
+// Closes a movement out. Confirming carries the transaction it became; deciding
+// against it carries nothing, which is the whole difference between the two —
+// both stop it being proposed, only one of them says it happened.
+export async function closeExpectedMovement(
+  id: number,
+  status: "confirmed" | "dismissed",
+  transactionId: number | null,
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE expected_movements SET status = $1, transaction_id = $2 WHERE id = $3",
+    [status, transactionId, id],
+  );
+}
+
 export async function listBudgets(): Promise<BudgetWithCategory[]> {
   const db = await getDb();
   return db.select<BudgetWithCategory[]>(
@@ -851,6 +952,10 @@ export const EXCHANGE_RATE_TYPE = "exchange_rate_type";
 export const NOTIFICATIONS_ENABLED = "notifications_enabled";
 // The facts already announced, as a JSON array of notification ids.
 export const NOTIFIED_IDS = "notified_ids";
+// The last month whose close the user actually dealt with, so the notice on the
+// statistics screen stops asking. Separate from NOTIFIED_IDS, which tracks a
+// different channel with a different idea of "already said".
+export const LAST_SEEN_CLOSE = "last_seen_close";
 // Column mappings the user has already worked out, keyed by the header row of
 // the file they came from, so the same bank's export does not have to be mapped
 // again every month.

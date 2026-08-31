@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type {
+  ExpectedMovementWithNames,
   InstallmentPlanWithNames,
   LoanWithNames,
   RecurringTransactionWithNames,
 } from "@/db/schema";
-import { projectCommitments } from "@/lib/projection";
+import { projectCommitments, projectExpected } from "@/lib/projection";
 
 const EMPTY = { recurring: [], installmentPlans: [], loans: [] };
 
@@ -200,5 +201,60 @@ describe("projectCommitments", () => {
     );
 
     expect(month.expenses).toBe(450);
+  });
+});
+
+describe("projectExpected", () => {
+  function makeExpected(
+    overrides: Partial<ExpectedMovementWithNames> = {},
+  ): ExpectedMovementWithNames {
+    return {
+      id: Math.random(),
+      description: "Casamiento",
+      amount: 100,
+      type: "expense",
+      currency: "ARS",
+      category_id: null,
+      payment_method_id: null,
+      due_date: "2026-09-15",
+      status: "pending",
+      transaction_id: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+      category_name: null,
+      category_icon: null,
+      payment_method_name: null,
+      ...overrides,
+    };
+  }
+
+  it("puts each movement in the month it falls due", () => {
+    const months = projectExpected(
+      [
+        makeExpected({ amount: 100, due_date: "2026-09-15" }),
+        makeExpected({ amount: 300, due_date: "2026-10-02" }),
+      ],
+      ["2026-09", "2026-10"],
+      "ARS",
+    );
+
+    expect(months.map((month) => month.expenses)).toEqual([100, 300]);
+  });
+
+  it("reaches the last day of a month, whatever its length", () => {
+    const [february] = projectExpected(
+      [makeExpected({ due_date: "2026-02-28" })],
+      ["2026-02"],
+      "ARS",
+    );
+
+    expect(february.expenses).toBe(100);
+  });
+
+  // The point of keeping this apart from projectCommitments: the two totals are
+  // never summed for the caller, so nothing downstream can present an intention
+  // as a debt.
+  it("counts nothing that projectCommitments already counts", () => {
+    const [month] = projectExpected([], ["2026-09"], "ARS");
+    expect(month).toEqual({ monthKey: "2026-09", income: 0, expenses: 0 });
   });
 });
