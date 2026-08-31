@@ -7,57 +7,50 @@ the release page afterwards never reach anyone who already has the app.
 
 ## Novedades
 
-- **Estadísticas ahora son dos pestañas: Resumen y Análisis.**
+- **Previstos: lo que sabés que se viene.**
 
-  Era una sola pantalla con once bloques apilados. El Resumen responde «cómo
-  vengo»: tu balance, el mes en curso, lo que ya está comprometido y los últimos
-  movimientos. El Análisis responde «qué pasó»: filtros, totales del período y
-  los gráficos.
+  Una compra grande en noviembre, la VTV de este año, un bono puntual. Se cargan
+  en Compromisos → Previstos, aparecen en la proyección de los próximos meses y,
+  cuando llega la fecha, los confirmás o los descartás. Nada se registra solo.
 
-- **El balance se muestra en pesos, en dólares y unificado**, con la cotización
-  usada debajo.
+  Van aparte de «Ya comprometido», que sigue mostrando solo cuotas, préstamos y
+  recurrentes. Lo que firmaste y lo que pensás que va a pasar son dos cosas
+  distintas, y sumarlas haría que ninguna de las dos fuera confiable.
 
-  El total consolidado solo era exacto y engañoso a la vez: quien vive en pesos
-  y guarda dólares aparte sabe que ese número no es lo que puede gastar esta
-  semana. Ahora son dos bolsillos, mostrados como dos.
+  Para lo que se repite todos los meses o todos los años siguen estando las
+  recurrentes: Previstos es para lo que pasa una sola vez.
 
-- **Los ingresos y gastos siempre tienen un período.**
+- **Cierres: cómo terminó cada mes, en PDF.**
 
-  Antes, sin filtros, sumaban todo el histórico. Un balance acumulado desde
-  siempre significa algo; un ingreso de hace dos años sumado al de este mes, no.
-  El análisis abre en los últimos 12 meses y la tercera cifra pasó a llamarse
-  **Resultado**, porque eso es: lo que dejó el período, no lo que tenés.
+  Una sección nueva en el panel lateral con todos los meses cerrados. Cada uno se
+  guarda como PDF con los ingresos y gastos por categoría, cuánto pesa cada una
+  sobre el total, y la comparación contra el mes anterior y contra el mismo mes
+  del año pasado.
 
-- **Nueva tarjeta «Ya comprometido»**: lo que deben los próximos tres meses en
-  cuotas, préstamos y recurrentes, también dibujado en el gráfico. No es un
-  pronóstico ni incluye lo que gastes de más: es un calendario que ya cargaste.
+  Un solo documento por mes, con todas las monedas que se movieron: si tuviste
+  gastos en pesos y en dólares, los dos están, cada uno con sus propias
+  comparaciones y sin sumarse nunca entre sí. La moneda que no se movió ese mes
+  no ocupa espacio.
 
-- **De nueve secciones a siete.**
+- **Aviso cuando el cierre está listo.**
 
-  **Compromisos** junta lo que se repite, las compras en cuotas y los préstamos:
-  las tres se confirman igual y esperaban en tres lugares distintos.
-  **Presupuestos** pasó a vivir dentro de Categorías, porque un presupuesto es un
-  tope de una categoría. El menú _Ver_ sigue listando todo, y `Cmd+1` a `Cmd+7`
-  siguen coincidiendo con el orden del panel lateral.
-
-- **Podés mandar sugerencias desde Ajustes.** Escribís dentro de la app y se abre
-  tu programa de correo con el mensaje listo. Nada sale de tu equipo hasta que
-  vos lo mandes.
+  Al terminar el mes, Estadísticas te avisa que el resumen está disponible, con
+  el botón para guardarlo ahí mismo. También llega como notificación del sistema,
+  una sola vez. Si lo dejás pasar no se pierde: el mes queda en Cierres para
+  siempre.
 
 ## Arreglos
 
-- **La ventana se puede arrastrar en macOS.** La barra de título es un overlay y
-  el contenido la tapaba por completo, así que no quedaba nada de dónde agarrar.
+- **Los informes largos ya no se imprimían cortados.** Todo lo que pasaba de un
+  alto de ventana salía en blanco, sin ninguna señal de que faltaba algo. Ahora
+  el documento ocupa las páginas que necesite.
 
-- **El ícono ya no se ve más grande que el del resto de las apps.** La placa
-  ocupaba todo el lienzo; macOS espera el cuerpo del ícono en 824 de 1024 px.
+- **Cambiar de Gasto a Ingreso en una recurrente ya no deja la categoría vieja.**
+  Se podía guardar un ingreso clasificado con una categoría de gastos.
 
-- **En Windows, la barra de título acompaña al modo oscuro** en vez de quedarse
-  clara arriba de una app oscura.
-
-- **Los textos al pasar el cursor por el panel lateral** ahora los dibuja la app
-  y dicen para qué sirve cada sección, en vez de repetir la etiqueta que ya
-  estás viendo.
+- **Las tarjetas vacías se leen mejor.** El texto que explica por qué no hay nada
+  va debajo del título, y el botón para crear el primero abajo de todo, en vez de
+  los dos sueltos en el medio.
 
 ## Instalación
 
